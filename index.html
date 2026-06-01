@@ -1149,163 +1149,237 @@ function exportJSON() {
 }
 
 function exportAE() {
-  const fps = 24, W = 1920, H = 1080;
-  const projectName = (state.projectName || 'Project').replace(/[^a-zA-Z0-9_\u3040-\u9FFF]/g,'_');
+  const FPS = 24, W = 1920, H = 1080;
+  const rawName = state.projectName || 'Project';
+  // Safe ASCII-only name for AE comp names (keeps Japanese via escape below)
+  const safeName = rawName.replace(/\\/g,'').replace(/"/g,'').replace(/'/g,'') || 'Project';
 
-  let totalSec = 0;
-  state.scenes.forEach(s => s.cuts.forEach(c => { totalSec += (c.duration||4); }));
-  if (totalSec === 0) { showToast('カットがありません'); return; }
+  let allCuts = [];
+  state.scenes.forEach((scene, si) => {
+    scene.cuts.forEach((cut, ci) => allCuts.push({scene, cut, si, ci}));
+  });
+  if (allCuts.length === 0) { showToast('カットがありません'); return; }
 
-  // Build JSX — use ES3-compatible ExtendScript
-  const lines = [];
-  lines.push('// STORYBOARD \u2192 After Effects ExtendScript');
-  lines.push('// Project: ' + (state.projectName||'Project'));
-  lines.push('// Generated: ' + new Date().toLocaleDateString('ja-JP'));
-  lines.push('// Usage: File > Scripts > Run Script File');
-  lines.push('');
-  lines.push('(function () {');
-  lines.push('  var fps = ' + fps + ';');
-  lines.push('  var W = ' + W + ', H = ' + H + ';');
-  lines.push('  var proj = app.project;');
-  lines.push('  app.beginUndoGroup("Storyboard Import");');
-  lines.push('');
-  lines.push('  // Master sequence comp');
-  lines.push('  var masterDur = ' + totalSec + ';');
-  lines.push('  var master = proj.items.addComp("MASTER_' + projectName + '", W, H, 1, masterDur, fps);');
-  lines.push('  var offset = 0;');
-  lines.push('');
+  // Helper: escape a string for use inside a JS double-quoted string in ExtendScript
+  function jsStr(s) {
+    return String(s||'')
+      .replace(/\\/g,'\\\\')
+      .replace(/"/g,'\\"')
+      .replace(/\r/g,'\\r')
+      .replace(/\n/g,'\\n')
+      .substring(0, 60);
+  }
+
+  // Camera move → position keyframe generator
+  // AE ExtendScript: camera Position is a 3D property [x, y, z]
+  // Default Z for 1920x1080 with 50mm equiv ≈ -1777 (AE internal unit)
+  function camLines(varCam, varPos, camMove, shotType, dur) {
+    const out = [];
+    const Z0 = -1777; // neutral Z
+    const PAN = 400, TILT = 300, ZOOM_NEAR = -800, ZOOM_FAR = -2800;
+
+    // All moves need keyframes → enable keyframing first
+    const needsKF = !['固定','ハンドヘルド'].includes(camMove);
+    if (!needsKF) {
+      // Static — just set value once
+      out.push(`  ${varCam}.property("Transform").property("Position").setValue([W/2, H/2, ${Z0}]);`);
+      return out;
+    }
+
+    out.push(`  var ${varPos} = ${varCam}.property("Transform").property("Position");`);
+
+    if (camMove === '右パン' || camMove === 'スライダー右') {
+      out.push(`  ${varPos}.setValueAtTime(0,   [W/2 - ${PAN}, H/2, ${Z0}]);`);
+      out.push(`  ${varPos}.setValueAtTime(${dur}, [W/2 + ${PAN}, H/2, ${Z0}]);`);
+    } else if (camMove === '左パン' || camMove === 'スライダー左') {
+      out.push(`  ${varPos}.setValueAtTime(0,   [W/2 + ${PAN}, H/2, ${Z0}]);`);
+      out.push(`  ${varPos}.setValueAtTime(${dur}, [W/2 - ${PAN}, H/2, ${Z0}]);`);
+    } else if (camMove === 'ズームイン' || shotType === 'CU' || shotType === 'ECU') {
+      out.push(`  ${varPos}.setValueAtTime(0,   [W/2, H/2, ${ZOOM_FAR}]);`);
+      out.push(`  ${varPos}.setValueAtTime(${dur}, [W/2, H/2, ${ZOOM_NEAR}]);`);
+    } else if (camMove === 'ズームアウト') {
+      out.push(`  ${varPos}.setValueAtTime(0,   [W/2, H/2, ${ZOOM_NEAR}]);`);
+      out.push(`  ${varPos}.setValueAtTime(${dur}, [W/2, H/2, ${ZOOM_FAR}]);`);
+    } else if (camMove === 'ティルトアップ') {
+      out.push(`  ${varPos}.setValueAtTime(0,   [W/2, H/2 + ${TILT}, ${Z0}]);`);
+      out.push(`  ${varPos}.setValueAtTime(${dur}, [W/2, H/2 - ${TILT}, ${Z0}]);`);
+    } else if (camMove === 'ティルトダウン') {
+      out.push(`  ${varPos}.setValueAtTime(0,   [W/2, H/2 - ${TILT}, ${Z0}]);`);
+      out.push(`  ${varPos}.setValueAtTime(${dur}, [W/2, H/2 + ${TILT}, ${Z0}]);`);
+    } else if (camMove === 'ドリー前進') {
+      out.push(`  ${varPos}.setValueAtTime(0,   [W/2, H/2, ${ZOOM_FAR}]);`);
+      out.push(`  ${varPos}.setValueAtTime(${dur}, [W/2, H/2, ${Z0}]);`);
+    } else if (camMove === 'ドリー後退') {
+      out.push(`  ${varPos}.setValueAtTime(0,   [W/2, H/2, ${Z0}]);`);
+      out.push(`  ${varPos}.setValueAtTime(${dur}, [W/2, H/2, ${ZOOM_FAR}]);`);
+    } else if (camMove === 'オービット' || shotType === 'カーブ') {
+      // 8-point orbit approximation
+      const R = 900;
+      for (let k = 0; k <= 8; k++) {
+        const t = ((dur / 8) * k).toFixed(4);
+        const ang = (Math.PI * 2 / 8) * k;
+        const px = Math.round(W/2 + R * Math.sin(ang));
+        const pz = Math.round(Z0 + R * (Math.cos(ang) - 1)); // orbit around Z0
+        out.push(`  ${varPos}.setValueAtTime(${t}, [${px}, ${Math.round(H/2)}, ${pz}]);`);
+      }
+    } else {
+      out.push(`  ${varPos}.setValueAtTime(0,   [W/2, H/2, ${Z0}]);`);
+      out.push(`  ${varPos}.setValueAtTime(${dur}, [W/2, H/2, ${Z0}]);`);
+    }
+    return out;
+  }
 
   const shotColors = {
-    WS:'[0.18,0.55,0.34]', MS:'[0.35,0.30,0.75]', CU:'[0.75,0.25,0.15]',
-    ECU:'[0.80,0.15,0.15]', OTS:'[0.15,0.45,0.80]', POV:'[0.50,0.50,0.50]',
-    INSERT:'[0.30,0.30,0.30]', '\u30ab\u30fc\u30d6':'[0.85,0.55,0.10]'
+    'WS':    '[0.18, 0.55, 0.34]',
+    'MS':    '[0.35, 0.30, 0.75]',
+    'CU':    '[0.75, 0.25, 0.15]',
+    'ECU':   '[0.80, 0.15, 0.15]',
+    'OTS':   '[0.15, 0.45, 0.80]',
+    'POV':   '[0.50, 0.50, 0.50]',
+    'INSERT':'[0.30, 0.30, 0.30]',
+    '\u30ab\u30fc\u30d6': '[0.85, 0.55, 0.10]',
   };
 
-  let globalCutIdx = 0;
-  state.scenes.forEach((scene, si) => {
-    const safeTitle = (scene.title||'Scene').replace(/['"\\]/g,'');
-    lines.push('  // ---- Scene ' + (si+1) + ': ' + safeTitle + ' ----');
-    scene.cuts.forEach((cut, ci) => {
-      globalCutIdx++;
-      const dur = cut.duration || 4;
-      const col = shotColors[cut.shotType] || '[0.4,0.4,0.4]';
-      const safeDesc = (cut.description||'').replace(/['"\\]/g,'').substring(0,40);
-      const safeAudio = (cut.audio||'').replace(/['"\\]/g,'').substring(0,30);
-      const cutLabel = 'C' + String(globalCutIdx).padStart(2,'0') + '_' + (cut.shotType||'XX');
-      const varC = 'c' + si + '_' + ci;
-      const varCam = 'cam' + si + '_' + ci;
-      const varML = 'ml' + si + '_' + ci;
-      const varPos = 'pos' + si + '_' + ci;
+  const L = []; // output lines
+  L.push('// ============================================================');
+  L.push('// STORYBOARD -> After Effects ExtendScript (.jsx)');
+  L.push('// Project : ' + jsStr(rawName));
+  L.push('// Generated: ' + new Date().toLocaleDateString('ja-JP'));
+  L.push('// Usage    : AE menu > File > Scripts > Run Script File...');
+  L.push('//            (Enable "Allow Scripts to Write Files" in Preferences)');
+  L.push('// ============================================================');
+  L.push('');
+  L.push('(function () {');
+  L.push('  // --- constants ---');
+  L.push('  var FPS = ' + FPS + ';');
+  L.push('  var W   = ' + W   + ';');
+  L.push('  var H   = ' + H   + ';');
+  L.push('  var proj = app.project;');
+  L.push('');
+  L.push('  app.beginUndoGroup("Storyboard Import");');
+  L.push('  try {');
 
-      lines.push('  var ' + varC + ' = proj.items.addComp("' + cutLabel + '", W, H, 1, ' + dur + ', fps);');
-      lines.push('  ' + varC + '.layers.addSolid(' + col + ', "' + cutLabel + '_bg", W, H, 1, ' + dur + ');');
+  // Total duration
+  const totalSec = allCuts.reduce((a,{cut}) => a + (cut.duration||4), 0);
+  L.push('');
+  L.push('  // ---- Master sequence composition ----');
+  L.push('  var masterDur = ' + totalSec + ';');
+  L.push('  var master = proj.items.addComp("MASTER_' + jsStr(safeName) + '", W, H, 1, masterDur, FPS);');
+  L.push('  var offset  = 0;');
+  L.push('');
 
-      // Camera — only add if needed for motion; always add for 3D feel
-      lines.push('  var ' + varCam + ' = ' + varC + '.layers.addCamera("CAM_' + cutLabel + '", [W/2, H/2]);');
-      lines.push('  ' + varCam + '.autoOrient = AutoOrientType.CAMERA_OR_POINT;');
+  allCuts.forEach(({scene, cut, si, ci}, idx) => {
+    const dur      = cut.duration || 4;
+    const col      = shotColors[cut.shotType] || '[0.40, 0.40, 0.40]';
+    const cutLabel = 'C' + String(idx+1).padStart(2,'0') + '_' + (cut.shotType || 'XX');
+    const vComp    = 'comp_' + idx;
+    const vCam     = 'cam_'  + idx;
+    const vML      = 'ml_'   + idx;
+    const vPos     = 'pos_'  + idx;
+    const camMove  = cut.camera || '固定';
 
-      const camMove = cut.camera || '固定';
-      if (camMove === '右パン' || camMove === 'スライダー右') {
-        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
-        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2-300, H/2, -1500]);');
-        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2+300, H/2, -1500]);');
-      } else if (camMove === '左パン' || camMove === 'スライダー左') {
-        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
-        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2+300, H/2, -1500]);');
-        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2-300, H/2, -1500]);');
-      } else if (camMove === 'ズームイン' || cut.shotType === 'CU' || cut.shotType === 'ECU') {
-        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
-        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2, H/2, -2200]);');
-        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2, H/2, -800]);');
-      } else if (camMove === 'ズームアウト') {
-        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
-        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2, H/2, -800]);');
-        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2, H/2, -2200]);');
-      } else if (camMove === 'ティルトアップ') {
-        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
-        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2, H/2+300, -1500]);');
-        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2, H/2-300, -1500]);');
-      } else if (camMove === 'ティルトダウン') {
-        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
-        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2, H/2-300, -1500]);');
-        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2, H/2+300, -1500]);');
-      } else if (camMove === 'オービット' || cut.shotType === '\u30ab\u30fc\u30d6') {
-        // Orbit: approximate circle with 8 keyframes
-        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
-        for (let k = 0; k <= 8; k++) {
-          const t = (dur / 8) * k;
-          const ang = (Math.PI * 2 / 8) * k;
-          const px = Math.round(W/2 + 900 * Math.sin(ang));
-          const pz = Math.round(-1500 + 900 * Math.cos(ang));
-          lines.push('  ' + varPos + '.setValueAtTime(' + t.toFixed(3) + ', [' + px + ', ' + Math.round(H/2) + ', ' + pz + ']);');
-        }
-      } else if (camMove === 'ドリー前進') {
-        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
-        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2, H/2, -2000]);');
-        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2, H/2, -1000]);');
-      } else if (camMove === 'ドリー後退') {
-        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
-        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2, H/2, -1000]);');
-        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2, H/2, -2000]);');
-      } else {
-        // 固定 / ハンドヘルド — static position
-        lines.push('  ' + varCam + '.property("Position").setValue([W/2, H/2, -1500]);');
-      }
+    L.push('  // -- Cut ' + (idx+1) + ': ' + jsStr(cutLabel) + ' | ' + jsStr(camMove) + ' | ' + jsStr(cut.description) + ' --');
 
-      // Marker on cut comp
-      lines.push('  var mk' + si + '_' + ci + ' = new MarkerValue("' + cutLabel + '\\n' + safeDesc + '\\n' + safeAudio + '");');
-      lines.push('  ' + varC + '.markerProperty.setValueAtTime(0, mk' + si + '_' + ci + ');');
+    // Create cut composition
+    L.push('  var ' + vComp + ' = proj.items.addComp("' + cutLabel + '", W, H, 1, ' + dur + ', FPS);');
 
-      // Place in master
-      lines.push('  var ' + varML + ' = master.layers.add(' + varC + ', ' + dur + ');');
-      lines.push('  ' + varML + '.startTime = offset;');
-      lines.push('  master.markerProperty.setValueAtTime(offset, new MarkerValue("' + cutLabel + '"));');
-      lines.push('  offset += ' + dur + ';');
-      lines.push('');
-    });
+    // Solid background (color per shot type)
+    L.push('  ' + vComp + '.layers.addSolid(' + col + ', "' + cutLabel + '_bg", W, H, 1, ' + dur + ');');
+
+    // Camera layer
+    L.push('  var ' + vCam + ' = ' + vComp + '.layers.addCamera("CAM", [W/2, H/2]);');
+
+    // Camera keyframes (no autoOrient — not needed and causes errors)
+    camLines(vCam, vPos, camMove, cut.shotType, dur).forEach(l => L.push(l));
+
+    // Marker on cut comp
+    const markerText = jsStr(cutLabel) + '\\\\n' + jsStr(cut.description) + '\\\\n' + jsStr(cut.audio);
+    L.push('  ' + vComp + '.markerProperty.setValueAtTime(0, new MarkerValue("' + markerText + '"));');
+
+    // Add to master sequence
+    L.push('  var ' + vML + ' = master.layers.add(' + vComp + ', ' + dur + ');');
+    L.push('  ' + vML + '.startTime = offset;');
+    L.push('  master.markerProperty.setValueAtTime(offset, new MarkerValue("' + jsStr(cutLabel) + '"));');
+    L.push('  offset += ' + dur + ';');
+    L.push('');
   });
 
-  lines.push('  master.openInViewer();');
-  lines.push('  app.endUndoGroup();');
-  lines.push('  alert("Storyboard import complete!\\n\\nProject: ' + (state.projectName||'Project') + '\\n' + globalCutIdx + ' cuts imported into MASTER_' + projectName + '");');
-  lines.push('})();');
+  L.push('  master.openInViewer();');
+  L.push('  app.endUndoGroup();');
+  L.push('  alert("Import complete!\\n\\nProject : ' + jsStr(rawName) + '\\nCuts    : ' + allCuts.length + '\\nDuration: ' + totalSec + 's\\n\\nMASTER comp is now open.");');
+  L.push('');
+  L.push('  } catch (e) {');
+  L.push('    app.endUndoGroup();');
+  L.push('    alert("Error: " + e.toString() + "\\nLine: " + e.line);');
+  L.push('  }');
+  L.push('})();');
 
-  const jsx = lines.join('\n');
-  const blob = new Blob([jsx], {type:'text/plain;charset=utf-8'});
-  download(blob, (state.projectName||'storyboard') + '_AE.jsx');
+  const jsx = L.join('\n');
+  const blob = new Blob([jsx], { type: 'text/plain;charset=utf-8' });
+  download(blob, (rawName || 'storyboard') + '_AE.jsx');
   showToast('AE Script (.jsx) を書き出しました');
   closeExportModal();
 }
 
 function exportPremiere() {
-  // Export as Premiere Pro sequence XML (FCP7 XML / legacy EDL-compatible format)
-  const fps = 24, W = 1920, H = 1080;
-  const projectName = state.projectName || 'Storyboard';
+  const FPS = 24, W = 1920, H = 1080;
+  const rawName = state.projectName || 'Storyboard';
 
   let allCuts = [];
   state.scenes.forEach((scene, si) => {
-    scene.cuts.forEach((cut, ci) => { allCuts.push({scene, cut, si, ci}); });
+    scene.cuts.forEach((cut, ci) => allCuts.push({scene, cut, si, ci}));
   });
   if (allCuts.length === 0) { showToast('カットがありません'); return; }
 
-  const fpsNum = fps;
-  const ntsc = 'FALSE';
+  const totalFrames = allCuts.reduce((a, {cut}) => a + (cut.duration||4) * FPS, 0);
 
-  // Build FCP7 XML (Premiere can import this)
-  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  // FCP7 XML — the format Premiere Pro can natively import via File > Import
+  // Key requirements:
+  //   1. Each <clipitem> must reference a <file> element (even a color bar placeholder)
+  //   2. <masterclip> id must match clipitem id
+  //   3. <sequence> wraps everything
+  const X = escXML; // alias
+
+  let xml = '';
+  xml += '<?xml version="1.0" encoding="UTF-8"?>\n';
   xml += '<!DOCTYPE xmeml>\n';
   xml += '<xmeml version="5">\n';
-  xml += '  <sequence>\n';
-  xml += '    <name>' + escXML(projectName) + '</name>\n';
-  xml += '    <duration>' + allCuts.reduce((a,{cut})=>a+(cut.duration||4)*fpsNum,0) + '</duration>\n';
-  xml += '    <rate><timebase>' + fpsNum + '</timebase><ntsc>' + ntsc + '</ntsc></rate>\n';
-  xml += '    <timecode><rate><timebase>' + fpsNum + '</timebase><ntsc>' + ntsc + '</ntsc></rate><string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode>\n';
+
+  // ---- File references (one per cut, color bars placeholder) ----
+  // Premiere needs a <file> block; we use a "Color Bars" generator as placeholder
+  const fileBlocks = allCuts.map(({cut}, idx) => {
+    const fid = 'file-' + (idx + 1);
+    const dur = (cut.duration || 4) * FPS;
+    return (
+      '  <file id="' + fid + '">\n' +
+      '    <name>' + X('C' + String(idx+1).padStart(2,'0') + '_' + (cut.shotType||'XX')) + '</name>\n' +
+      '    <pathurl></pathurl>\n' +
+      '    <rate><timebase>' + FPS + '</timebase><ntsc>FALSE</ntsc></rate>\n' +
+      '    <duration>' + dur + '</duration>\n' +
+      '    <timecode><rate><timebase>' + FPS + '</timebase><ntsc>FALSE</ntsc></rate>' +
+                  '<string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode>\n' +
+      '    <media><video><duration>' + dur + '</duration></video></media>\n' +
+      '  </file>\n'
+    );
+  }).join('');
+
+  // ---- Sequence ----
+  xml += '  <sequence id="sequence-1">\n';
+  xml += '    <name>' + X(rawName) + '</name>\n';
+  xml += '    <duration>' + totalFrames + '</duration>\n';
+  xml += '    <rate><timebase>' + FPS + '</timebase><ntsc>FALSE</ntsc></rate>\n';
+  xml += '    <timecode>\n';
+  xml += '      <rate><timebase>' + FPS + '</timebase><ntsc>FALSE</ntsc></rate>\n';
+  xml += '      <string>00:00:00:00</string>\n';
+  xml += '      <frame>0</frame>\n';
+  xml += '      <displayformat>NDF</displayformat>\n';
+  xml += '    </timecode>\n';
   xml += '    <media>\n';
   xml += '      <video>\n';
   xml += '        <format>\n';
   xml += '          <samplecharacteristics>\n';
-  xml += '            <rate><timebase>' + fpsNum + '</timebase><ntsc>' + ntsc + '</ntsc></rate>\n';
-  xml += '            <width>' + W + '</width>\n';
+  xml += '            <rate><timebase>' + FPS + '</timebase><ntsc>FALSE</ntsc></rate>\n';
+  xml += '            <width>'  + W + '</width>\n';
   xml += '            <height>' + H + '</height>\n';
   xml += '            <anamorphic>FALSE</anamorphic>\n';
   xml += '            <pixelaspectratio>square</pixelaspectratio>\n';
@@ -1314,51 +1388,66 @@ function exportPremiere() {
   xml += '        </format>\n';
   xml += '        <track>\n';
 
-  let timeOffset = 0;
-  allCuts.forEach(({scene, cut, si, ci}, idx) => {
-    const durFrames = (cut.duration || 4) * fpsNum;
-    const cutName = 'C' + String(idx+1).padStart(2,'0') + ' ' + (SHOT_NAMES[cut.shotType]||cut.shotType||'Shot');
-    xml += '          <clipitem id="clipitem-' + (idx+1) + '">\n';
-    xml += '            <name>' + escXML(cutName) + '</name>\n';
+  // Color label map (Premiere label index)
+  const labelMap = {WS:'2', MS:'3', CU:'4', ECU:'5', OTS:'6', POV:'7', INSERT:'8'};
+
+  let offset = 0;
+  allCuts.forEach(({scene, cut}, idx) => {
+    const dur     = (cut.duration || 4) * FPS;
+    const fid     = 'file-' + (idx + 1);
+    const mcid    = 'masterclip-' + (idx + 1);
+    const ciid    = 'clipitem-' + (idx + 1);
+    const cutName = 'C' + String(idx+1).padStart(2,'0') + ' ' + (SHOT_NAMES[cut.shotType] || cut.shotType || 'Shot');
+    const label   = labelMap[cut.shotType] || '0';
+    const note    = [cut.description, cut.camera ? 'Camera: '+cut.camera : '', cut.audio ? 'Audio: '+cut.audio : ''].filter(Boolean).join(' | ');
+
+    xml += '          <clipitem id="' + ciid + '">\n';
+    xml += '            <masterclipid>' + mcid + '</masterclipid>\n';
+    xml += '            <name>' + X(cutName) + '</name>\n';
     xml += '            <enabled>TRUE</enabled>\n';
-    xml += '            <duration>' + durFrames + '</duration>\n';
-    xml += '            <rate><timebase>' + fpsNum + '</timebase><ntsc>' + ntsc + '</ntsc></rate>\n';
-    xml += '            <start>' + timeOffset + '</start>\n';
-    xml += '            <end>' + (timeOffset + durFrames) + '</end>\n';
+    xml += '            <duration>' + dur + '</duration>\n';
+    xml += '            <rate><timebase>' + FPS + '</timebase><ntsc>FALSE</ntsc></rate>\n';
+    xml += '            <start>'  + offset       + '</start>\n';
+    xml += '            <end>'    + (offset+dur)  + '</end>\n';
     xml += '            <in>0</in>\n';
-    xml += '            <out>' + durFrames + '</out>\n';
-    xml += '            <comments>\n';
-    xml += '              <comment>' + escXML((cut.description||'') + ' | Camera: ' + (cut.camera||'') + ' | Audio: ' + (cut.audio||'')) + '</comment>\n';
-    xml += '            </comments>\n';
-    // Color label per shot type
-    const labels = {WS:'2',MS:'3',CU:'4',ECU:'5',OTS:'6',POV:'7',INSERT:'8'};
-    xml += '            <labels><label2>' + (labels[cut.shotType]||'0') + '</label2></labels>\n';
+    xml += '            <out>'   + dur            + '</out>\n';
+    xml += '            <file id="' + fid + '"/>\n';   // reference to file block
+    xml += '            <labels><label2>' + label + '</label2></labels>\n';
+    xml += '            <comments><mastercomment1>' + X(note) + '</mastercomment1></comments>\n';
     xml += '          </clipitem>\n';
-    timeOffset += durFrames;
+    offset += dur;
   });
 
   xml += '        </track>\n';
   xml += '      </video>\n';
-  xml += '      <audio><track></track></audio>\n';
+  xml += '      <audio>\n';
+  xml += '        <numOutputChannels>2</numOutputChannels>\n';
+  xml += '        <track><enabled>TRUE</enabled><locked>FALSE</locked></track>\n';
+  xml += '      </audio>\n';
   xml += '    </media>\n';
+
+  // Sequence markers
   xml += '    <markers>\n';
-  timeOffset = 0;
-  allCuts.forEach(({scene, cut, si, ci}, idx) => {
-    const durFrames = (cut.duration||4) * fpsNum;
+  offset = 0;
+  allCuts.forEach(({cut}, idx) => {
+    const dur = (cut.duration||4) * FPS;
     xml += '      <marker>\n';
-    xml += '        <name>' + escXML('C' + String(idx+1).padStart(2,'0') + ' ' + (cut.shotType||'')) + '</name>\n';
-    xml += '        <comment>' + escXML(cut.description||'') + '</comment>\n';
-    xml += '        <in>' + timeOffset + '</in>\n';
-    xml += '        <out>' + timeOffset + '</out>\n';
+    xml += '        <name>' + X('C' + String(idx+1).padStart(2,'0') + ' ' + (cut.shotType||'')) + '</name>\n';
+    xml += '        <comment>' + X(cut.description||'') + '</comment>\n';
+    xml += '        <in>'  + offset     + '</in>\n';
+    xml += '        <out>' + offset     + '</out>\n';
     xml += '      </marker>\n';
-    timeOffset += durFrames;
+    offset += dur;
   });
   xml += '    </markers>\n';
   xml += '  </sequence>\n';
+
+  // Append file blocks at root level (after sequence)
+  xml += fileBlocks;
   xml += '</xmeml>\n';
 
-  const blob = new Blob([xml], {type:'text/xml;charset=utf-8'});
-  download(blob, (state.projectName||'storyboard') + '_Premiere.xml');
+  const blob = new Blob([xml], { type: 'text/xml;charset=utf-8' });
+  download(blob, (rawName || 'storyboard') + '_Premiere.xml');
   showToast('Premiere XML を書き出しました');
   closeExportModal();
 }
