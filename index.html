@@ -1,0 +1,1536 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STORYBOARD — コンテ制作ツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --black: #000000;
+  --white: #ffffff;
+  --gray-100: #f5f5f5;
+  --gray-200: #e8e8e8;
+  --gray-400: #aaaaaa;
+  --gray-600: #555555;
+  --font-display: 'Bebas Neue', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --font-body: 'Noto Sans JP', sans-serif;
+}
+
+html { font-size: 14px; }
+body {
+  background: var(--white);
+  color: var(--black);
+  font-family: var(--font-body);
+  font-weight: 300;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 2px; }
+::-webkit-scrollbar-track { background: var(--white); }
+::-webkit-scrollbar-thumb { background: var(--black); }
+
+/* ── HEADER ── */
+header {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center;
+  padding: 0 32px;
+  height: 52px;
+  border-bottom: 1px solid var(--black);
+  background: var(--white);
+}
+.logo {
+  font-family: var(--font-display);
+  font-size: 26px;
+  letter-spacing: 0.08em;
+  color: var(--black);
+  flex: 1;
+}
+.header-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--gray-600);
+  text-transform: uppercase;
+}
+.header-actions { display: flex; gap: 8px; margin-left: 24px; }
+.btn {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 7px 16px;
+  border: 1px solid var(--black);
+  background: var(--white);
+  color: var(--black);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.btn:hover { background: var(--black); color: var(--white); }
+.btn.primary { background: var(--black); color: var(--white); }
+.btn.primary:hover { background: var(--gray-600); }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn:disabled:hover { background: var(--white); color: var(--black); }
+
+/* ── LAYOUT ── */
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr 300px;
+  height: calc(100vh - 52px);
+  margin-top: 52px;
+}
+
+/* ── SIDEBAR ── */
+.sidebar {
+  border-right: 1px solid var(--black);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-header {
+  padding: 20px 20px 14px;
+  border-bottom: 1px solid var(--gray-200);
+}
+.sidebar-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gray-400);
+  margin-bottom: 10px;
+}
+.project-input {
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: 0.05em;
+  border: none;
+  outline: none;
+  width: 100%;
+  background: transparent;
+  color: var(--black);
+}
+.project-input::placeholder { color: var(--gray-400); }
+
+.scene-list { flex: 1; overflow-y: auto; }
+.scene-item {
+  padding: 14px 20px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--gray-200);
+  transition: background 0.1s;
+  position: relative;
+}
+.scene-item:hover { background: var(--gray-100); }
+.scene-item.active { background: var(--black); }
+.scene-item.active .scene-num,
+.scene-item.active .scene-title,
+.scene-item.active .scene-stat { color: var(--white); }
+.scene-item.active .scene-stat { color: var(--gray-400); }
+.scene-num {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  color: var(--gray-400);
+  margin-bottom: 4px;
+}
+.scene-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--black);
+  margin-bottom: 3px;
+}
+.scene-stat {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--gray-600);
+}
+.scene-delete {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 20px;
+  display: none; align-items: center; justify-content: center;
+  font-size: 14px; color: var(--gray-400); cursor: pointer;
+  background: none; border: none;
+}
+.scene-item:hover .scene-delete { display: flex; }
+.scene-item.active .scene-delete { display: flex; color: var(--gray-400); }
+.scene-item.active .scene-delete:hover { color: var(--white); }
+
+.sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid var(--gray-200);
+}
+.add-scene-btn {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 10px;
+  border: 1px dashed var(--gray-400);
+  background: transparent;
+  color: var(--gray-600);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.add-scene-btn:hover { border-color: var(--black); color: var(--black); }
+
+/* ── MAIN CANVAS ── */
+.main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.main-toolbar {
+  padding: 0 28px;
+  height: 44px;
+  border-bottom: 1px solid var(--gray-200);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.scene-heading {
+  font-family: var(--font-display);
+  font-size: 20px;
+  letter-spacing: 0.05em;
+  flex: 1;
+}
+.toolbar-sep {
+  width: 1px; height: 20px;
+  background: var(--gray-200);
+}
+.icon-btn {
+  width: 30px; height: 30px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--gray-200);
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.15s;
+  color: var(--black);
+}
+.icon-btn:hover { border-color: var(--black); background: var(--black); color: var(--white); }
+
+.cuts-grid {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 28px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1px;
+  background: var(--gray-200);
+  align-content: start;
+}
+.cut-card {
+  background: var(--white);
+  cursor: pointer;
+  transition: background 0.1s;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.cut-card:hover { background: var(--gray-100); }
+.cut-card.selected { background: var(--black); }
+.cut-card.selected .cut-label,
+.cut-card.selected .cut-shot,
+.cut-card.selected .cut-info,
+.cut-card.selected .cut-desc { color: var(--white); }
+.cut-card.selected .cut-number { color: var(--gray-400); }
+.cut-thumb {
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  border-bottom: 1px solid;
+  border-color: inherit;
+  overflow: hidden;
+}
+.cut-card.selected .cut-thumb { border-color: var(--gray-600); }
+.cut-card:not(.selected) .cut-thumb { border-color: var(--gray-200); }
+
+.shot-frame {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+}
+.shot-icon-wrap {
+  width: 80px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.shot-icon-wrap svg {
+  width: 80px;
+  height: 52px;
+  color: var(--gray-300, #cccccc);
+  transition: color 0.15s;
+}
+.cut-card.selected .shot-icon-wrap svg { color: var(--gray-600); }
+.cut-card:hover:not(.selected) .shot-icon-wrap svg { color: var(--gray-400); }
+.shot-name-badge {
+  position: absolute;
+  bottom: 7px;
+  left: 0; right: 0;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gray-400);
+  transition: color 0.1s;
+}
+.cut-card.selected .shot-name-badge { color: var(--gray-600); }
+.cut-card:hover:not(.selected) .shot-name-badge { color: var(--gray-600); }
+
+.cut-body { padding: 12px 14px; }
+.cut-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+.cut-number {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  color: var(--gray-400);
+}
+.cut-shot {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: var(--gray-600);
+  margin-left: auto;
+}
+.cut-label {
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+.cut-info {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--gray-600);
+  letter-spacing: 0.05em;
+}
+
+.add-cut-card {
+  background: var(--white);
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 1px dashed var(--gray-400);
+  margin: 0;
+  transition: all 0.15s;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--gray-400);
+}
+.add-cut-card:hover { border-color: var(--black); color: var(--black); background: var(--gray-100); }
+.add-cut-card span {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+/* ── DETAIL PANEL ── */
+.detail {
+  border-left: 1px solid var(--black);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.detail-header {
+  padding: 0 20px;
+  height: 44px;
+  border-bottom: 1px solid var(--gray-200);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detail-header-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gray-400);
+  flex: 1;
+}
+.detail-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+.detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  color: var(--gray-400);
+}
+.detail-empty-icon {
+  font-family: var(--font-display);
+  font-size: 64px;
+  letter-spacing: 0.05em;
+  color: var(--gray-200);
+}
+.detail-empty p {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.field { margin-bottom: 18px; }
+.field-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gray-400);
+  display: block;
+  margin-bottom: 6px;
+}
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 300;
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  color: var(--black);
+  padding: 8px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+  appearance: none;
+}
+.field input:focus,
+.field select:focus,
+.field textarea:focus { border-color: var(--black); }
+.field textarea { resize: vertical; min-height: 72px; line-height: 1.6; }
+.field select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+}
+
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.detail-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--gray-200);
+  display: flex;
+  gap: 8px;
+}
+.delete-cut-btn {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  border: 1px solid var(--gray-200);
+  background: transparent;
+  color: var(--gray-600);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.delete-cut-btn:hover { border-color: var(--black); color: var(--black); }
+
+/* ── AI PANEL ── */
+.ai-section {
+  border-top: 1px solid var(--gray-200);
+  padding: 16px 20px;
+}
+.ai-section-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--gray-400);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ai-dot {
+  width: 5px; height: 5px;
+  background: var(--black);
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.2} }
+.ai-input {
+  width: 100%;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 300;
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  color: var(--black);
+  padding: 8px 10px;
+  outline: none;
+  margin-bottom: 8px;
+  transition: border-color 0.15s;
+  resize: none;
+  min-height: 60px;
+  line-height: 1.6;
+}
+.ai-input:focus { border-color: var(--black); }
+.ai-status {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--gray-600);
+  min-height: 14px;
+  margin-bottom: 6px;
+}
+
+/* ── EXPORT MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.7);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--white);
+  width: 480px;
+  border: 1px solid var(--black);
+  transform: translateY(12px);
+  transition: transform 0.2s;
+}
+.modal-overlay.open .modal { transform: none; }
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--gray-200);
+  display: flex; align-items: center;
+}
+.modal-title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0.05em;
+  flex: 1;
+}
+.modal-close {
+  width: 28px; height: 28px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--gray-200);
+  background: none; cursor: pointer; font-size: 14px;
+  transition: all 0.15s;
+}
+.modal-close:hover { background: var(--black); color: var(--white); }
+.modal-body { padding: 24px; }
+.export-option {
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--gray-200);
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.export-option:hover { border-color: var(--black); background: var(--gray-100); }
+.export-icon {
+  font-family: var(--font-display);
+  font-size: 22px;
+  letter-spacing: 0.05em;
+  color: var(--gray-400);
+  width: 48px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.export-option:hover .export-icon { color: var(--black); }
+.export-info { flex: 1; }
+.export-name { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+.export-desc { font-family: var(--font-mono); font-size: 9px; color: var(--gray-600); letter-spacing: 0.08em; }
+.export-arrow { font-size: 16px; color: var(--gray-400); }
+.export-option:hover .export-arrow { color: var(--black); }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed; bottom: 32px; right: 32px; z-index: 300;
+  background: var(--black); color: var(--white);
+  padding: 12px 20px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transform: translateY(16px);
+  opacity: 0;
+  transition: all 0.2s;
+  pointer-events: none;
+}
+.toast.show { transform: none; opacity: 1; }
+
+/* ── EMPTY STATE ── */
+.empty-scene {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: var(--gray-400);
+}
+.empty-scene-title {
+  font-family: var(--font-display);
+  font-size: 48px;
+  letter-spacing: 0.05em;
+  color: var(--gray-200);
+}
+.empty-scene p {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+/* ── STATUS BAR ── */
+.status-bar {
+  height: 28px;
+  border-top: 1px solid var(--gray-200);
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  gap: 24px;
+  flex-shrink: 0;
+  background: var(--gray-100);
+}
+.status-item {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--gray-600);
+  text-transform: uppercase;
+}
+.status-item span { color: var(--black); font-weight: 500; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">STORYBOARD</div>
+  <div class="header-meta" id="headerMeta">— コンテ制作ツール</div>
+  <div class="header-actions">
+    <button class="btn" onclick="openExportModal()">Export</button>
+    <button class="btn primary" onclick="saveProject()">Save</button>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-label">Project</div>
+      <input class="project-input" id="projectName" placeholder="PROJECT TITLE" maxlength="40" oninput="onProjectNameChange()">
+    </div>
+    <div class="scene-list" id="sceneList"></div>
+    <div class="sidebar-footer">
+      <button class="add-scene-btn" onclick="addScene()">+ Add Scene</button>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="main-toolbar">
+      <div class="scene-heading" id="sceneHeading">—</div>
+      <button class="icon-btn" title="AIカット提案" onclick="openAiSuggest()" id="aiSuggestBtn">✦</button>
+    </div>
+    <div id="cutsGrid" class="cuts-grid"></div>
+    <div class="status-bar">
+      <div class="status-item">Cuts <span id="statusCuts">0</span></div>
+      <div class="status-item">Duration <span id="statusDuration">00:00</span></div>
+      <div class="status-item">Scene <span id="statusScene">—</span></div>
+    </div>
+  </div>
+
+  <!-- DETAIL PANEL -->
+  <div class="detail">
+    <div class="detail-header">
+      <span class="detail-header-label">Cut Detail</span>
+      <button class="icon-btn" style="width:24px;height:24px;font-size:11px" onclick="closeDetail()" title="閉じる">✕</button>
+    </div>
+    <div class="detail-body" id="detailBody">
+      <div class="detail-empty">
+        <div class="detail-empty-icon">CUT</div>
+        <p>Select a cut to edit</p>
+      </div>
+    </div>
+    <div id="detailFooterArea"></div>
+    <div class="ai-section">
+      <div class="ai-section-label"><div class="ai-dot"></div>AI Suggest</div>
+      <textarea class="ai-input" id="aiPrompt" placeholder="シーンの内容を入力（例: 朝の公園、主人公が走ってくる）" rows="3"></textarea>
+      <div class="ai-status" id="aiStatus"></div>
+      <button class="btn" style="width:100%;font-size:9px" onclick="runAiSuggest()" id="aiBtn">Generate Cuts ↗</button>
+    </div>
+  </div>
+</div>
+
+<!-- EXPORT MODAL -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">EXPORT</div>
+      <button class="modal-close" onclick="closeExportModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="export-option" onclick="exportPDF()">
+        <div class="export-icon">PDF</div>
+        <div class="export-info">
+          <div class="export-name">絵コンテ PDF</div>
+          <div class="export-desc">A4 縦 / 4カット/ページ / 印刷対応</div>
+        </div>
+        <div class="export-arrow">→</div>
+      </div>
+      <div class="export-option" onclick="exportAE()">
+        <div class="export-icon">JSX</div>
+        <div class="export-info">
+          <div class="export-name">After Effects Script</div>
+          <div class="export-desc">.jsx / コンポ自動生成 / カメラキーフレーム付き</div>
+        </div>
+        <div class="export-arrow">→</div>
+      </div>
+      <div class="export-option" onclick="exportPremiere()">
+        <div class="export-icon">XML</div>
+        <div class="export-info">
+          <div class="export-name">Premiere Pro Sequence</div>
+          <div class="export-desc">.xml / FCP7形式 / カラーラベル・マーカー付き</div>
+        </div>
+        <div class="export-arrow">→</div>
+      </div>
+      <div class="export-option" onclick="exportJSON()">
+        <div class="export-icon">JSON</div>
+        <div class="export-info">
+          <div class="export-name">プロジェクトデータ</div>
+          <div class="export-desc">バックアップ / 他ツール連携用</div>
+        </div>
+        <div class="export-arrow">→</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ================================================================
+//  STATE
+// ================================================================
+let state = {
+  projectName: '',
+  scenes: [],
+  activeSceneId: null,
+  activeCutId: null,
+};
+
+const SHOT_TYPES = ['WS','MS','CU','ECU','OTS','POV','INSERT','カーブ'];
+const CAMERA_MOVES = ['固定','右パン','左パン','ズームイン','ズームアウト','ティルトアップ','ティルトダウン','オービット','スライダー左','スライダー右','ハンドヘルド','ドリー前進','ドリー後退'];
+
+// Shot type full names
+const SHOT_NAMES = {
+  'WS':     'Wide Shot',
+  'MS':     'Medium Shot',
+  'CU':     'Close Up',
+  'ECU':    'Extreme Close Up',
+  'OTS':    'Over the Shoulder',
+  'POV':    'Point of View',
+  'INSERT': 'Insert Shot',
+  'カーブ': 'Curve Move',
+};
+
+// SVG icons per shot type (returns SVG string, stroke=currentColor)
+function shotSVG(type) {
+  const s = `stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
+  const icons = {
+    'WS': `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}>
+      <rect x="4" y="4" width="56" height="34" rx="2"/>
+      <line x1="4" y1="21" x2="60" y2="21" stroke-dasharray="3 3" opacity="0.4"/>
+      <line x1="32" y1="4" x2="32" y2="38" stroke-dasharray="3 3" opacity="0.4"/>
+      <circle cx="32" cy="21" r="7"/>
+      <circle cx="32" cy="21" r="2" fill="currentColor" stroke="none" opacity="0.4"/>
+    </svg>`,
+    'MS': `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}>
+      <rect x="4" y="4" width="56" height="34" rx="2"/>
+      <ellipse cx="32" cy="22" rx="9" ry="14"/>
+      <line x1="32" y1="8" x2="32" y2="38" stroke-dasharray="3 3" opacity="0.35"/>
+    </svg>`,
+    'CU': `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}>
+      <rect x="4" y="4" width="56" height="34" rx="2"/>
+      <circle cx="32" cy="21" r="13"/>
+      <circle cx="32" cy="21" r="4" fill="currentColor" stroke="none" opacity="0.35"/>
+      <line x1="19" y1="21" x2="45" y2="21" opacity="0.3"/>
+      <line x1="32" y1="8" x2="32" y2="34" opacity="0.3"/>
+    </svg>`,
+    'ECU': `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}>
+      <rect x="4" y="4" width="56" height="34" rx="2"/>
+      <circle cx="32" cy="21" r="18"/>
+      <circle cx="32" cy="21" r="6" fill="currentColor" stroke="none" opacity="0.35"/>
+      <line x1="4" y1="21" x2="60" y2="21" opacity="0.2"/>
+      <line x1="32" y1="4" x2="32" y2="38" opacity="0.2"/>
+    </svg>`,
+    'OTS': `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}>
+      <rect x="4" y="4" width="56" height="34" rx="2"/>
+      <ellipse cx="17" cy="34" rx="10" ry="8"/>
+      <line x1="17" y1="26" x2="17" y2="14"/>
+      <ellipse cx="17" cy="12" rx="5" ry="5"/>
+      <rect x="30" y="10" width="24" height="22" rx="1" opacity="0.5"/>
+      <ellipse cx="42" cy="21" rx="5" ry="7" opacity="0.7"/>
+    </svg>`,
+    'POV': `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}>
+      <rect x="4" y="4" width="56" height="34" rx="2"/>
+      <path d="M4 38 Q32 6 60 38" opacity="0.5"/>
+      <path d="M14 38 Q32 14 50 38" opacity="0.7"/>
+      <circle cx="32" cy="30" r="4"/>
+      <line x1="32" y1="4" x2="32" y2="26" stroke-dasharray="2 3" opacity="0.5"/>
+    </svg>`,
+    'INSERT': `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}>
+      <rect x="4" y="4" width="56" height="34" rx="2" opacity="0.4"/>
+      <rect x="18" y="10" width="28" height="22" rx="1"/>
+      <line x1="4" y1="4" x2="18" y2="10" stroke-dasharray="2 2" opacity="0.4"/>
+      <line x1="60" y1="4" x2="46" y2="10" stroke-dasharray="2 2" opacity="0.4"/>
+      <line x1="4" y1="38" x2="18" y2="32" stroke-dasharray="2 2" opacity="0.4"/>
+      <line x1="60" y1="38" x2="46" y2="32" stroke-dasharray="2 2" opacity="0.4"/>
+    </svg>`,
+    'カーブ': `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}>
+      <rect x="4" y="4" width="56" height="34" rx="2"/>
+      <path d="M10 32 C18 10 30 28 42 16 C48 10 54 14 58 10" stroke-dasharray="4 2"/>
+      <polygon points="58,10 53,12 55,17" fill="currentColor" stroke="none" opacity="0.6"/>
+      <circle cx="10" cy="32" r="2.5" fill="currentColor" stroke="none" opacity="0.5"/>
+    </svg>`,
+  };
+  return icons[type] || `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}><rect x="4" y="4" width="56" height="34" rx="2"/></svg>`;
+}
+
+// ================================================================
+//  INIT
+// ================================================================
+function init() {
+  const saved = localStorage.getItem('storyboard_v2');
+  if (saved) {
+    try { state = JSON.parse(saved); } catch(e) {}
+  }
+  if (!state.scenes) state.scenes = [];
+  if (state.scenes.length === 0) addScene(true);
+  document.getElementById('projectName').value = state.projectName || '';
+  if (!state.activeSceneId && state.scenes.length > 0) {
+    state.activeSceneId = state.scenes[0].id;
+  }
+  render();
+}
+
+// ================================================================
+//  RENDER
+// ================================================================
+function render() {
+  renderSidebar();
+  renderMainCanvas();
+  renderDetail();
+  updateStatus();
+  updateHeaderMeta();
+}
+
+function renderSidebar() {
+  const list = document.getElementById('sceneList');
+  list.innerHTML = state.scenes.map(scene => `
+    <div class="scene-item ${scene.id === state.activeSceneId ? 'active' : ''}"
+         onclick="selectScene('${scene.id}')">
+      <div class="scene-num">SCENE ${String(state.scenes.indexOf(scene)+1).padStart(2,'0')}</div>
+      <div class="scene-title">${esc(scene.title || '無題')}</div>
+      <div class="scene-stat">${scene.cuts.length} cuts · ${formatDuration(totalDuration(scene))}</div>
+      <button class="scene-delete" onclick="deleteScene(event,'${scene.id}')">✕</button>
+    </div>
+  `).join('');
+}
+
+function renderMainCanvas() {
+  const scene = activeScene();
+  const heading = document.getElementById('sceneHeading');
+  const grid = document.getElementById('cutsGrid');
+
+  if (!scene) {
+    heading.textContent = '—';
+    grid.innerHTML = `<div class="empty-scene" style="grid-column:1/-1">
+      <div class="empty-scene-title">SCENE</div>
+      <p>Add a scene to get started</p>
+    </div>`;
+    return;
+  }
+
+  const sceneNum = String(state.scenes.indexOf(scene)+1).padStart(2,'0');
+  heading.textContent = `SCENE ${sceneNum} — ${scene.title || '無題'}`;
+
+  let html = scene.cuts.map((cut, i) => `
+    <div class="cut-card ${cut.id === state.activeCutId ? 'selected' : ''}"
+         onclick="selectCut('${cut.id}')">
+      <div class="cut-thumb">
+        <div class="shot-frame">
+          <div class="shot-icon-wrap">${shotSVG(cut.shotType)}</div>
+        </div>
+        <div class="shot-name-badge">${SHOT_NAMES[cut.shotType] || cut.shotType || '—'}</div>
+      </div>
+      <div class="cut-body">
+        <div class="cut-header">
+          <span class="cut-number">C-${String(i+1).padStart(2,'0')}</span>
+          <span class="cut-shot">${cut.camera || ''}</span>
+        </div>
+        <div class="cut-label">${esc(cut.description || '説明なし')}</div>
+        <div class="cut-info">${cut.duration || 0}s · ${cut.audio || '—'}</div>
+      </div>
+    </div>
+  `).join('');
+
+  html += `<div class="add-cut-card" onclick="addCut()">
+    <span style="font-size:20px;font-weight:300">+</span>
+    <span>Add Cut</span>
+  </div>`;
+
+  grid.innerHTML = html;
+}
+
+function renderDetail() {
+  const body = document.getElementById('detailBody');
+  const footer = document.getElementById('detailFooterArea');
+  const cut = activeCut();
+
+  if (!cut) {
+    body.innerHTML = `<div class="detail-empty">
+      <div class="detail-empty-icon">CUT</div>
+      <p>Select a cut to edit</p>
+    </div>`;
+    footer.innerHTML = '';
+    return;
+  }
+
+  body.innerHTML = `
+    <div class="field">
+      <label class="field-label">Shot Type</label>
+      <select onchange="updateCut('shotType',this.value)">
+        ${SHOT_TYPES.map(s => `<option ${cut.shotType===s?'selected':''}>${s}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field">
+      <label class="field-label">Camera Move</label>
+      <select onchange="updateCut('camera',this.value)">
+        ${CAMERA_MOVES.map(c => `<option ${cut.camera===c?'selected':''}>${c}</option>`).join('')}
+      </select>
+    </div>
+    <div class="field field-row">
+      <div>
+        <label class="field-label">Duration (s)</label>
+        <input type="number" min="1" max="120" value="${cut.duration||3}" onchange="updateCut('duration',+this.value)">
+      </div>
+      <div>
+        <label class="field-label">Lens (mm)</label>
+        <input type="number" min="14" max="200" value="${cut.lens||35}" onchange="updateCut('lens',+this.value)">
+      </div>
+    </div>
+    <div class="field">
+      <label class="field-label">Description</label>
+      <textarea oninput="updateCut('description',this.value)">${esc(cut.description||'')}</textarea>
+    </div>
+    <div class="field">
+      <label class="field-label">Audio / Notes</label>
+      <input type="text" value="${esc(cut.audio||'')}" oninput="updateCut('audio',this.value)" placeholder="BGM, SE, セリフ...">
+    </div>
+    <div class="field">
+      <label class="field-label">Dialogue</label>
+      <textarea oninput="updateCut('dialogue',this.value)" style="min-height:56px">${esc(cut.dialogue||'')}</textarea>
+    </div>
+  `;
+
+  footer.innerHTML = `<div class="detail-footer">
+    <button class="delete-cut-btn" style="flex:1" onclick="deleteCut()">Delete Cut</button>
+    <button class="btn" onclick="duplicateCut()">Duplicate</button>
+  </div>`;
+}
+
+function updateStatus() {
+  const scene = activeScene();
+  const cuts = scene ? scene.cuts.length : 0;
+  const dur = scene ? totalDuration(scene) : 0;
+  const idx = scene ? state.scenes.indexOf(scene)+1 : 0;
+  document.getElementById('statusCuts').textContent = cuts;
+  document.getElementById('statusDuration').textContent = formatDuration(dur);
+  document.getElementById('statusScene').textContent = scene ? `${idx} / ${state.scenes.length}` : '—';
+}
+
+function updateHeaderMeta() {
+  const total = state.scenes.reduce((a,s) => a + s.cuts.length, 0);
+  const dur = state.scenes.reduce((a,s) => a + totalDuration(s), 0);
+  document.getElementById('headerMeta').textContent =
+    `— ${state.scenes.length} Scenes · ${total} Cuts · ${formatDuration(dur)}`;
+}
+
+// ================================================================
+//  ACTIONS
+// ================================================================
+function addScene(silent) {
+  const id = uid();
+  state.scenes.push({ id, title: 'New Scene', cuts: [] });
+  state.activeSceneId = id;
+  state.activeCutId = null;
+  if (!silent) { save(); render(); }
+}
+
+function selectScene(id) {
+  state.activeSceneId = id;
+  state.activeCutId = null;
+  save(); render();
+}
+
+function deleteScene(e, id) {
+  e.stopPropagation();
+  if (state.scenes.length <= 1) { showToast('最低1シーン必要です'); return; }
+  state.scenes = state.scenes.filter(s => s.id !== id);
+  if (state.activeSceneId === id) state.activeSceneId = state.scenes[0].id;
+  state.activeCutId = null;
+  save(); render();
+}
+
+function addCut() {
+  const scene = activeScene();
+  if (!scene) return;
+  const id = uid();
+  const num = scene.cuts.length + 1;
+  scene.cuts.push({
+    id, shotType: 'MS', camera: '固定', duration: 4, lens: 35,
+    description: '', audio: '', dialogue: ''
+  });
+  state.activeCutId = id;
+  save(); render();
+  // scroll to new card
+  setTimeout(() => {
+    const cards = document.querySelectorAll('.cut-card');
+    if (cards.length) cards[cards.length-1].scrollIntoView({behavior:'smooth',block:'center'});
+  }, 50);
+}
+
+function selectCut(id) {
+  state.activeCutId = id;
+  render();
+}
+
+function closeDetail() {
+  state.activeCutId = null;
+  render();
+}
+
+function updateCut(key, value) {
+  const cut = activeCut();
+  if (!cut) return;
+  cut[key] = value;
+  save(); renderMainCanvas(); updateStatus(); updateHeaderMeta();
+}
+
+function deleteCut() {
+  const scene = activeScene();
+  if (!scene) return;
+  scene.cuts = scene.cuts.filter(c => c.id !== state.activeCutId);
+  state.activeCutId = null;
+  save(); render();
+}
+
+function duplicateCut() {
+  const scene = activeScene();
+  const cut = activeCut();
+  if (!scene || !cut) return;
+  const idx = scene.cuts.indexOf(cut);
+  const newCut = { ...cut, id: uid() };
+  scene.cuts.splice(idx+1, 0, newCut);
+  state.activeCutId = newCut.id;
+  save(); render();
+}
+
+function onProjectNameChange() {
+  state.projectName = document.getElementById('projectName').value;
+  save(); updateHeaderMeta();
+}
+
+// ================================================================
+//  AI SUGGEST (Claude API)
+// ================================================================
+async function runAiSuggest() {
+  const prompt = document.getElementById('aiPrompt').value.trim();
+  if (!prompt) { showToast('シーン内容を入力してください'); return; }
+  const scene = activeScene();
+  if (!scene) { showToast('シーンを選択してください'); return; }
+
+  const btn = document.getElementById('aiBtn');
+  const status = document.getElementById('aiStatus');
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+  status.textContent = 'AI analyzing scene...';
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: `あなたは映像制作のプロです。以下のシーン説明に対して、最適なカット割りを3〜5カット提案してください。
+
+シーン説明: ${prompt}
+
+必ず以下のJSON配列のみを返してください。説明や前置きは不要です。
+[
+  {
+    "shotType": "WS|MS|CU|ECU|OTS|POV|INSERT|カーブ のいずれか",
+    "camera": "固定|右パン|左パン|ズームイン|ズームアウト|ティルトアップ|ティルトダウン|オービット|スライダー左|スライダー右|ハンドヘルド|ドリー前進|ドリー後退 のいずれか",
+    "duration": 数字（秒）,
+    "lens": 数字（mm、14〜200）,
+    "description": "カットの説明（日本語、30字以内）",
+    "audio": "音声・BGM・SE指示（日本語、20字以内）"
+  }
+]`
+        }]
+      })
+    });
+
+    const data = await resp.json();
+    const text = data.content.map(b => b.text || '').join('');
+    const clean = text.replace(/```json|```/g,'').trim();
+    const cuts = JSON.parse(clean);
+
+    cuts.forEach(c => {
+      scene.cuts.push({
+        id: uid(),
+        shotType: c.shotType || 'MS',
+        camera: c.camera || '固定',
+        duration: c.duration || 4,
+        lens: c.lens || 35,
+        description: c.description || '',
+        audio: c.audio || '',
+        dialogue: ''
+      });
+    });
+
+    status.textContent = `✓ ${cuts.length} cuts generated`;
+    document.getElementById('aiPrompt').value = '';
+    save(); render();
+    showToast(`${cuts.length}カット生成しました`);
+  } catch(e) {
+    console.error(e);
+    status.textContent = 'Error — please try again';
+    showToast('生成に失敗しました');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Generate Cuts ↗';
+  }
+}
+
+// ================================================================
+//  EXPORT
+// ================================================================
+function openExportModal() {
+  document.getElementById('exportModal').classList.add('open');
+}
+function closeExportModal() {
+  document.getElementById('exportModal').classList.remove('open');
+}
+
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], {type:'application/json'});
+  download(blob, `${state.projectName || 'storyboard'}.json`);
+  showToast('JSONを書き出しました');
+  closeExportModal();
+}
+
+function exportAE() {
+  const fps = 24, W = 1920, H = 1080;
+  const projectName = (state.projectName || 'Project').replace(/[^a-zA-Z0-9_\u3040-\u9FFF]/g,'_');
+
+  let totalSec = 0;
+  state.scenes.forEach(s => s.cuts.forEach(c => { totalSec += (c.duration||4); }));
+  if (totalSec === 0) { showToast('カットがありません'); return; }
+
+  // Build JSX — use ES3-compatible ExtendScript
+  const lines = [];
+  lines.push('// STORYBOARD \u2192 After Effects ExtendScript');
+  lines.push('// Project: ' + (state.projectName||'Project'));
+  lines.push('// Generated: ' + new Date().toLocaleDateString('ja-JP'));
+  lines.push('// Usage: File > Scripts > Run Script File');
+  lines.push('');
+  lines.push('(function () {');
+  lines.push('  var fps = ' + fps + ';');
+  lines.push('  var W = ' + W + ', H = ' + H + ';');
+  lines.push('  var proj = app.project;');
+  lines.push('  app.beginUndoGroup("Storyboard Import");');
+  lines.push('');
+  lines.push('  // Master sequence comp');
+  lines.push('  var masterDur = ' + totalSec + ';');
+  lines.push('  var master = proj.items.addComp("MASTER_' + projectName + '", W, H, 1, masterDur, fps);');
+  lines.push('  var offset = 0;');
+  lines.push('');
+
+  const shotColors = {
+    WS:'[0.18,0.55,0.34]', MS:'[0.35,0.30,0.75]', CU:'[0.75,0.25,0.15]',
+    ECU:'[0.80,0.15,0.15]', OTS:'[0.15,0.45,0.80]', POV:'[0.50,0.50,0.50]',
+    INSERT:'[0.30,0.30,0.30]', '\u30ab\u30fc\u30d6':'[0.85,0.55,0.10]'
+  };
+
+  let globalCutIdx = 0;
+  state.scenes.forEach((scene, si) => {
+    const safeTitle = (scene.title||'Scene').replace(/['"\\]/g,'');
+    lines.push('  // ---- Scene ' + (si+1) + ': ' + safeTitle + ' ----');
+    scene.cuts.forEach((cut, ci) => {
+      globalCutIdx++;
+      const dur = cut.duration || 4;
+      const col = shotColors[cut.shotType] || '[0.4,0.4,0.4]';
+      const safeDesc = (cut.description||'').replace(/['"\\]/g,'').substring(0,40);
+      const safeAudio = (cut.audio||'').replace(/['"\\]/g,'').substring(0,30);
+      const cutLabel = 'C' + String(globalCutIdx).padStart(2,'0') + '_' + (cut.shotType||'XX');
+      const varC = 'c' + si + '_' + ci;
+      const varCam = 'cam' + si + '_' + ci;
+      const varML = 'ml' + si + '_' + ci;
+      const varPos = 'pos' + si + '_' + ci;
+
+      lines.push('  var ' + varC + ' = proj.items.addComp("' + cutLabel + '", W, H, 1, ' + dur + ', fps);');
+      lines.push('  ' + varC + '.layers.addSolid(' + col + ', "' + cutLabel + '_bg", W, H, 1, ' + dur + ');');
+
+      // Camera — only add if needed for motion; always add for 3D feel
+      lines.push('  var ' + varCam + ' = ' + varC + '.layers.addCamera("CAM_' + cutLabel + '", [W/2, H/2]);');
+      lines.push('  ' + varCam + '.autoOrient = AutoOrientType.CAMERA_OR_POINT;');
+
+      const camMove = cut.camera || '固定';
+      if (camMove === '右パン' || camMove === 'スライダー右') {
+        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
+        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2-300, H/2, -1500]);');
+        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2+300, H/2, -1500]);');
+      } else if (camMove === '左パン' || camMove === 'スライダー左') {
+        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
+        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2+300, H/2, -1500]);');
+        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2-300, H/2, -1500]);');
+      } else if (camMove === 'ズームイン' || cut.shotType === 'CU' || cut.shotType === 'ECU') {
+        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
+        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2, H/2, -2200]);');
+        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2, H/2, -800]);');
+      } else if (camMove === 'ズームアウト') {
+        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
+        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2, H/2, -800]);');
+        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2, H/2, -2200]);');
+      } else if (camMove === 'ティルトアップ') {
+        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
+        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2, H/2+300, -1500]);');
+        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2, H/2-300, -1500]);');
+      } else if (camMove === 'ティルトダウン') {
+        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
+        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2, H/2-300, -1500]);');
+        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2, H/2+300, -1500]);');
+      } else if (camMove === 'オービット' || cut.shotType === '\u30ab\u30fc\u30d6') {
+        // Orbit: approximate circle with 8 keyframes
+        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
+        for (let k = 0; k <= 8; k++) {
+          const t = (dur / 8) * k;
+          const ang = (Math.PI * 2 / 8) * k;
+          const px = Math.round(W/2 + 900 * Math.sin(ang));
+          const pz = Math.round(-1500 + 900 * Math.cos(ang));
+          lines.push('  ' + varPos + '.setValueAtTime(' + t.toFixed(3) + ', [' + px + ', ' + Math.round(H/2) + ', ' + pz + ']);');
+        }
+      } else if (camMove === 'ドリー前進') {
+        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
+        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2, H/2, -2000]);');
+        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2, H/2, -1000]);');
+      } else if (camMove === 'ドリー後退') {
+        lines.push('  var ' + varPos + ' = ' + varCam + '.property("Position");');
+        lines.push('  ' + varPos + '.setValueAtTime(0,   [W/2, H/2, -1000]);');
+        lines.push('  ' + varPos + '.setValueAtTime(' + dur + ', [W/2, H/2, -2000]);');
+      } else {
+        // 固定 / ハンドヘルド — static position
+        lines.push('  ' + varCam + '.property("Position").setValue([W/2, H/2, -1500]);');
+      }
+
+      // Marker on cut comp
+      lines.push('  var mk' + si + '_' + ci + ' = new MarkerValue("' + cutLabel + '\\n' + safeDesc + '\\n' + safeAudio + '");');
+      lines.push('  ' + varC + '.markerProperty.setValueAtTime(0, mk' + si + '_' + ci + ');');
+
+      // Place in master
+      lines.push('  var ' + varML + ' = master.layers.add(' + varC + ', ' + dur + ');');
+      lines.push('  ' + varML + '.startTime = offset;');
+      lines.push('  master.markerProperty.setValueAtTime(offset, new MarkerValue("' + cutLabel + '"));');
+      lines.push('  offset += ' + dur + ';');
+      lines.push('');
+    });
+  });
+
+  lines.push('  master.openInViewer();');
+  lines.push('  app.endUndoGroup();');
+  lines.push('  alert("Storyboard import complete!\\n\\nProject: ' + (state.projectName||'Project') + '\\n' + globalCutIdx + ' cuts imported into MASTER_' + projectName + '");');
+  lines.push('})();');
+
+  const jsx = lines.join('\n');
+  const blob = new Blob([jsx], {type:'text/plain;charset=utf-8'});
+  download(blob, (state.projectName||'storyboard') + '_AE.jsx');
+  showToast('AE Script (.jsx) を書き出しました');
+  closeExportModal();
+}
+
+function exportPremiere() {
+  // Export as Premiere Pro sequence XML (FCP7 XML / legacy EDL-compatible format)
+  const fps = 24, W = 1920, H = 1080;
+  const projectName = state.projectName || 'Storyboard';
+
+  let allCuts = [];
+  state.scenes.forEach((scene, si) => {
+    scene.cuts.forEach((cut, ci) => { allCuts.push({scene, cut, si, ci}); });
+  });
+  if (allCuts.length === 0) { showToast('カットがありません'); return; }
+
+  const fpsNum = fps;
+  const ntsc = 'FALSE';
+
+  // Build FCP7 XML (Premiere can import this)
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n';
+  xml += '<!DOCTYPE xmeml>\n';
+  xml += '<xmeml version="5">\n';
+  xml += '  <sequence>\n';
+  xml += '    <name>' + escXML(projectName) + '</name>\n';
+  xml += '    <duration>' + allCuts.reduce((a,{cut})=>a+(cut.duration||4)*fpsNum,0) + '</duration>\n';
+  xml += '    <rate><timebase>' + fpsNum + '</timebase><ntsc>' + ntsc + '</ntsc></rate>\n';
+  xml += '    <timecode><rate><timebase>' + fpsNum + '</timebase><ntsc>' + ntsc + '</ntsc></rate><string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode>\n';
+  xml += '    <media>\n';
+  xml += '      <video>\n';
+  xml += '        <format>\n';
+  xml += '          <samplecharacteristics>\n';
+  xml += '            <rate><timebase>' + fpsNum + '</timebase><ntsc>' + ntsc + '</ntsc></rate>\n';
+  xml += '            <width>' + W + '</width>\n';
+  xml += '            <height>' + H + '</height>\n';
+  xml += '            <anamorphic>FALSE</anamorphic>\n';
+  xml += '            <pixelaspectratio>square</pixelaspectratio>\n';
+  xml += '            <fielddominance>none</fielddominance>\n';
+  xml += '          </samplecharacteristics>\n';
+  xml += '        </format>\n';
+  xml += '        <track>\n';
+
+  let timeOffset = 0;
+  allCuts.forEach(({scene, cut, si, ci}, idx) => {
+    const durFrames = (cut.duration || 4) * fpsNum;
+    const cutName = 'C' + String(idx+1).padStart(2,'0') + ' ' + (SHOT_NAMES[cut.shotType]||cut.shotType||'Shot');
+    xml += '          <clipitem id="clipitem-' + (idx+1) + '">\n';
+    xml += '            <name>' + escXML(cutName) + '</name>\n';
+    xml += '            <enabled>TRUE</enabled>\n';
+    xml += '            <duration>' + durFrames + '</duration>\n';
+    xml += '            <rate><timebase>' + fpsNum + '</timebase><ntsc>' + ntsc + '</ntsc></rate>\n';
+    xml += '            <start>' + timeOffset + '</start>\n';
+    xml += '            <end>' + (timeOffset + durFrames) + '</end>\n';
+    xml += '            <in>0</in>\n';
+    xml += '            <out>' + durFrames + '</out>\n';
+    xml += '            <comments>\n';
+    xml += '              <comment>' + escXML((cut.description||'') + ' | Camera: ' + (cut.camera||'') + ' | Audio: ' + (cut.audio||'')) + '</comment>\n';
+    xml += '            </comments>\n';
+    // Color label per shot type
+    const labels = {WS:'2',MS:'3',CU:'4',ECU:'5',OTS:'6',POV:'7',INSERT:'8'};
+    xml += '            <labels><label2>' + (labels[cut.shotType]||'0') + '</label2></labels>\n';
+    xml += '          </clipitem>\n';
+    timeOffset += durFrames;
+  });
+
+  xml += '        </track>\n';
+  xml += '      </video>\n';
+  xml += '      <audio><track></track></audio>\n';
+  xml += '    </media>\n';
+  xml += '    <markers>\n';
+  timeOffset = 0;
+  allCuts.forEach(({scene, cut, si, ci}, idx) => {
+    const durFrames = (cut.duration||4) * fpsNum;
+    xml += '      <marker>\n';
+    xml += '        <name>' + escXML('C' + String(idx+1).padStart(2,'0') + ' ' + (cut.shotType||'')) + '</name>\n';
+    xml += '        <comment>' + escXML(cut.description||'') + '</comment>\n';
+    xml += '        <in>' + timeOffset + '</in>\n';
+    xml += '        <out>' + timeOffset + '</out>\n';
+    xml += '      </marker>\n';
+    timeOffset += durFrames;
+  });
+  xml += '    </markers>\n';
+  xml += '  </sequence>\n';
+  xml += '</xmeml>\n';
+
+  const blob = new Blob([xml], {type:'text/xml;charset=utf-8'});
+  download(blob, (state.projectName||'storyboard') + '_Premiere.xml');
+  showToast('Premiere XML を書き出しました');
+  closeExportModal();
+}
+
+function escXML(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+}
+
+function exportPDF() {
+  const projectName = state.projectName || 'Storyboard';
+  showToast('PDF生成中...');
+  closeExportModal();
+
+  // PDFをサーバーサイドで生成（Python/reportlab）するためのデータを準備
+  // Webアプリ単体ではpdf-libやjspdfを使用
+  // ここではjsPDF風のHTMLプリントフォールバックを実装
+  generatePrintView(projectName);
+}
+
+function generatePrintView(projectName) {
+  const allCuts = [];
+  state.scenes.forEach((scene, si) => {
+    scene.cuts.forEach((cut, ci) => {
+      allCuts.push({ scene, cut, sceneIdx: si+1, cutIdx: ci+1 });
+    });
+  });
+
+  let html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+<title>${projectName} — 絵コンテ</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+@page { size: A4; margin: 15mm; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans JP',sans-serif;font-weight:300;color:#000;background:#fff;font-size:11px}
+.page-header{display:flex;align-items:baseline;border-bottom:1.5px solid #000;padding-bottom:8px;margin-bottom:16px}
+.page-title{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:0.05em;flex:1}
+.page-meta{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;color:#555}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{border:0.5px solid #000;page-break-inside:avoid}
+.thumb{height:90px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;border-bottom:0.5px solid #000;position:relative}
+.shot-big{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:0.05em;color:#ddd}
+.badge-num{position:absolute;top:6px;left:7px;font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;background:#000;color:#fff;padding:2px 7px}
+.badge-scene{position:absolute;top:6px;right:7px;font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;color:#888}
+.body{padding:8px 10px}
+.row{display:flex;gap:8px;margin-bottom:5px;align-items:center}
+.label{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.12em;color:#888;text-transform:uppercase;width:48px;flex-shrink:0}
+.value{font-size:10px;font-weight:400}
+.sep{border-top:0.5px solid #e8e8e8;margin:5px 0}
+.desc{font-size:10px;line-height:1.6;color:#333}
+.page-break{page-break-after:always}
+.page-footer{margin-top:12px;border-top:0.5px solid #ccc;padding-top:6px;display:flex;justify-content:space-between}
+.pf{font-family:'DM Mono',monospace;font-size:8px;color:#aaa;letter-spacing:0.08em}
+@media print{.no-print{display:none}}
+</style>
+</head><body>`;
+
+  // Cover
+  html += `<div style="min-height:200px;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:20px;margin-bottom:20px;border-bottom:2px solid #000">
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#888;margin-bottom:8px">Storyboard</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:48px;letter-spacing:0.05em">${projectName.toUpperCase() || 'UNTITLED'}</div>
+    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;color:#555;margin-top:8px">${state.scenes.length} Scenes · ${allCuts.length} Cuts · ${new Date().toLocaleDateString('ja-JP')}</div>
+  </div>`;
+
+  // Scene summaries
+  state.scenes.forEach((scene, si) => {
+    const dur = totalDuration(scene);
+    html += `<div style="display:flex;align-items:baseline;gap:12px;padding:6px 0;border-bottom:0.5px solid #e8e8e8">
+      <span style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.15em;color:#888">SCENE ${String(si+1).padStart(2,'0')}</span>
+      <span style="font-size:11px;font-weight:500">${scene.title || '無題'}</span>
+      <span style="font-family:'DM Mono',monospace;font-size:8px;color:#aaa;margin-left:auto">${scene.cuts.length} cuts · ${formatDuration(dur)}</span>
+    </div>`;
+  });
+
+  // Cuts grid (4 per page)
+  const perPage = 4;
+  for (let p = 0; p < Math.ceil(allCuts.length / perPage); p++) {
+    const pageItems = allCuts.slice(p * perPage, (p+1) * perPage);
+    html += `<div class="${p===0?'page-break':''}"><div style="margin-top:20px">
+      <div class="page-header">
+        <span class="page-title">${(state.projectName||'STORYBOARD').toUpperCase()}</span>
+        <span class="page-meta">Page ${p+2} · ${new Date().toLocaleDateString('ja-JP')}</span>
+      </div>
+      <div class="grid">`;
+
+    pageItems.forEach(({scene, cut, sceneIdx, cutIdx}) => {
+      html += `<div class="card">
+        <div class="thumb">
+          <div class="shot-big">${cut.shotType||'—'}</div>
+          <span class="badge-num">C-${String(cutIdx).padStart(2,'0')}</span>
+          <span class="badge-scene">SC${String(sceneIdx).padStart(2,'0')}</span>
+        </div>
+        <div class="body">
+          <div class="row"><span class="label">Shot</span><span class="value">${cut.shotType||'—'}</span></div>
+          <div class="row"><span class="label">Camera</span><span class="value">${cut.camera||'—'}</span></div>
+          <div class="row"><span class="label">Lens</span><span class="value">${cut.lens||'—'}mm</span></div>
+          <div class="row"><span class="label">Duration</span><span class="value">${cut.duration||'—'}s</span></div>
+          <div class="sep"></div>
+          <div class="desc">${cut.description||'—'}</div>
+          ${cut.dialogue?`<div class="sep"></div><div style="font-style:italic;font-size:10px;color:#555">"${cut.dialogue}"</div>`:''}
+          ${cut.audio?`<div style="font-family:'DM Mono',monospace;font-size:8px;color:#888;margin-top:5px;letter-spacing:0.06em">♪ ${cut.audio}</div>`:''}
+        </div>
+      </div>`;
+    });
+
+    html += `</div>
+      <div class="page-footer">
+        <span class="pf">${state.projectName || 'STORYBOARD'} · CONFIDENTIAL</span>
+        <span class="pf">${p+2} / ${Math.ceil(allCuts.length/perPage)+1}</span>
+      </div>
+    </div></div>`;
+
+    if (p < Math.ceil(allCuts.length/perPage)-1) html += `<div class="page-break"></div>`;
+  }
+
+  html += `<div class="no-print" style="position:fixed;bottom:20px;right:20px">
+    <button onclick="window.print()" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;padding:10px 20px;background:#000;color:#fff;border:none;cursor:pointer">Print / Save PDF</button>
+    <button onclick="window.close()" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;padding:10px 20px;background:#fff;color:#000;border:1px solid #000;cursor:pointer;margin-left:8px">Close</button>
+  </div>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  showToast('印刷プレビューを開きました');
+}
+
+// ================================================================
+//  HELPERS
+// ================================================================
+function activeScene() { return state.scenes.find(s => s.id === state.activeSceneId) || null; }
+function activeCut() {
+  const scene = activeScene();
+  if (!scene) return null;
+  return scene.cuts.find(c => c.id === state.activeCutId) || null;
+}
+function totalDuration(scene) { return scene.cuts.reduce((a,c) => a + (c.duration||0), 0); }
+function formatDuration(sec) {
+  const m = Math.floor(sec/60), s = sec%60;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function uid() { return Math.random().toString(36).slice(2,10); }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function save() { try { localStorage.setItem('storyboard_v2', JSON.stringify(state)); } catch(e){} }
+function download(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+function saveProject() { save(); showToast('Saved'); }
+function openAiSuggest() { document.getElementById('aiPrompt').focus(); }
+
+// Close modal on overlay click
+document.getElementById('exportModal').addEventListener('click', function(e) {
+  if (e.target === this) closeExportModal();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if ((e.metaKey||e.ctrlKey) && e.key==='s') { e.preventDefault(); saveProject(); }
+  if ((e.metaKey||e.ctrlKey) && e.key==='e') { e.preventDefault(); openExportModal(); }
+  if (e.key==='Escape') { closeExportModal(); closeDetail(); }
+});
+
+init();
+</script>
+</body>
+</html>
