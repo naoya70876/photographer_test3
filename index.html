@@ -734,7 +734,7 @@ let state = {
   activeCutId: null,
 };
 
-const SHOT_TYPES = ['WS','MS','CU','ECU','OTS','POV','INSERT','カーブ'];
+const SHOT_TYPES = ['WS','MS','CU','ECU','OTS','POV','INSERT','Curve'];
 const CAMERA_MOVES = ['固定','右パン','左パン','ズームイン','ズームアウト','ティルトアップ','ティルトダウン','オービット','スライダー左','スライダー右','ハンドヘルド','ドリー前進','ドリー後退'];
 
 // Shot type full names
@@ -746,7 +746,7 @@ const SHOT_NAMES = {
   'OTS':    'Over the Shoulder',
   'POV':    'Point of View',
   'INSERT': 'Insert Shot',
-  'カーブ': 'Curve Move',
+  'Curve': 'Curve Move',
 };
 
 // SVG icons per shot type (returns SVG string, stroke=currentColor)
@@ -802,7 +802,7 @@ function shotSVG(type) {
       <line x1="4" y1="38" x2="18" y2="32" stroke-dasharray="2 2" opacity="0.4"/>
       <line x1="60" y1="38" x2="46" y2="32" stroke-dasharray="2 2" opacity="0.4"/>
     </svg>`,
-    'カーブ': `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}>
+    'Curve': `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}>
       <rect x="4" y="4" width="56" height="34" rx="2"/>
       <path d="M10 32 C18 10 30 28 42 16 C48 10 54 14 58 10" stroke-dasharray="4 2"/>
       <polygon points="58,10 53,12 55,17" fill="currentColor" stroke="none" opacity="0.6"/>
@@ -1088,7 +1088,7 @@ async function runAiSuggest() {
 必ず以下のJSON配列のみを返してください。説明や前置きは不要です。
 [
   {
-    "shotType": "WS|MS|CU|ECU|OTS|POV|INSERT|カーブ のいずれか",
+    "shotType": "WS|MS|CU|ECU|OTS|POV|INSERT|Curve のいずれか",
     "camera": "固定|右パン|左パン|ズームイン|ズームアウト|ティルトアップ|ティルトダウン|オービット|スライダー左|スライダー右|ハンドヘルド|ドリー前進|ドリー後退 のいずれか",
     "duration": 数字（秒）,
     "lens": 数字（mm、14〜200）,
@@ -1236,7 +1236,7 @@ function exportAE() {
       } else if (move==='ドリー後退') {
         lines.push(vP+'.setValueAtTime(0,[W/2,H/2,'+Z0+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2,H/2,'+ZF+']);');
-      } else if (move==='オービット'||cut.shotType==='\u30ab\u30fc\u30d6') {
+      } else if (move==='オービット'||cut.shotType==='Curve') {
         const R=900;
         for (let k=0;k<=8;k++){
           const t=(dur/8*k).toFixed(3);
@@ -1484,7 +1484,7 @@ body{font-family:'Noto Sans JP',sans-serif;font-weight:300;color:#000;background
       <div class="grid">`;
 
     pageItems.forEach(({scene, cut, sceneIdx, cutIdx}) => {
-      const shotLabel = cut.shotType === 'カーブ' ? 'Curve' : (cut.shotType||'—');
+      const shotLabel = cut.shotType||'—';
       html += `<div class="card">
         <div class="thumb">
           <div class="shot-big">${shotLabel}</div>
