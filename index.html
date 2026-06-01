@@ -1446,7 +1446,7 @@ body{font-family:'Noto Sans JP',sans-serif;font-weight:300;color:#000;background
 .value{font-size:10px;font-weight:400}
 .sep{border-top:0.5px solid #e8e8e8;margin:5px 0}
 .desc{font-size:10px;line-height:1.6;color:#333}
-.page-break{page-break-after:always}
+.cut-page{page-break-before:always;margin-top:0}
 .page-footer{margin-top:12px;border-top:0.5px solid #ccc;padding-top:6px;display:flex;justify-content:space-between}
 .pf{font-family:'DM Mono',monospace;font-size:8px;color:#aaa;letter-spacing:0.08em}
 @media print{.no-print{display:none}}
@@ -1472,9 +1472,11 @@ body{font-family:'Noto Sans JP',sans-serif;font-weight:300;color:#000;background
 
   // Cuts grid (4 per page)
   const perPage = 4;
+  const totalPages = Math.ceil(allCuts.length / perPage) + 1; // +1 for cover
   for (let p = 0; p < Math.ceil(allCuts.length / perPage); p++) {
     const pageItems = allCuts.slice(p * perPage, (p+1) * perPage);
-    html += `<div class="${p===0?'page-break':''}"><div style="margin-top:20px">
+    // page-break-before on every cut page (including first) to separate from cover
+    html += `<div class="cut-page">
       <div class="page-header">
         <span class="page-title">${(state.projectName||'STORYBOARD').toUpperCase()}</span>
         <span class="page-meta">Page ${p+2} · ${new Date().toLocaleDateString('ja-JP')}</span>
@@ -1482,14 +1484,15 @@ body{font-family:'Noto Sans JP',sans-serif;font-weight:300;color:#000;background
       <div class="grid">`;
 
     pageItems.forEach(({scene, cut, sceneIdx, cutIdx}) => {
+      const shotLabel = cut.shotType === 'カーブ' ? 'Curve' : (cut.shotType||'—');
       html += `<div class="card">
         <div class="thumb">
-          <div class="shot-big">${cut.shotType||'—'}</div>
+          <div class="shot-big">${shotLabel}</div>
           <span class="badge-num">C-${String(cutIdx).padStart(2,'0')}</span>
           <span class="badge-scene">SC${String(sceneIdx).padStart(2,'0')}</span>
         </div>
         <div class="body">
-          <div class="row"><span class="label">Shot</span><span class="value">${cut.shotType||'—'}</span></div>
+          <div class="row"><span class="label">Shot</span><span class="value">${shotLabel}</span></div>
           <div class="row"><span class="label">Camera</span><span class="value">${cut.camera||'—'}</span></div>
           <div class="row"><span class="label">Lens</span><span class="value">${cut.lens||'—'}mm</span></div>
           <div class="row"><span class="label">Duration</span><span class="value">${cut.duration||'—'}s</span></div>
@@ -1504,11 +1507,9 @@ body{font-family:'Noto Sans JP',sans-serif;font-weight:300;color:#000;background
     html += `</div>
       <div class="page-footer">
         <span class="pf">${state.projectName || 'STORYBOARD'} · CONFIDENTIAL</span>
-        <span class="pf">${p+2} / ${Math.ceil(allCuts.length/perPage)+1}</span>
+        <span class="pf">${p+2} / ${totalPages}</span>
       </div>
-    </div></div>`;
-
-    if (p < Math.ceil(allCuts.length/perPage)-1) html += `<div class="page-break"></div>`;
+    </div>`;
   }
 
   html += `<div class="no-print" style="position:fixed;bottom:20px;right:20px">
