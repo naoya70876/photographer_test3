@@ -1446,29 +1446,28 @@ body{font-family:'Noto Sans JP',sans-serif;font-weight:300;color:#000;background
 .value{font-size:10px;font-weight:400}
 .sep{border-top:0.5px solid #e8e8e8;margin:5px 0}
 .desc{font-size:10px;line-height:1.6;color:#333}
-.cut-page{page-break-before:always;margin-top:0}
+.cut-page{page-break-before:always;margin-top:0}.cut-page:first-of-type{page-break-before:auto}
 .page-footer{margin-top:12px;border-top:0.5px solid #ccc;padding-top:6px;display:flex;justify-content:space-between}
 .pf{font-family:'DM Mono',monospace;font-size:8px;color:#aaa;letter-spacing:0.08em}
 @media print{.no-print{display:none}}
 </style>
 </head><body>`;
 
-  // Cover
-  html += `<div style="min-height:200px;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:20px;margin-bottom:20px;border-bottom:2px solid #000">
-    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:#888;margin-bottom:8px">Storyboard</div>
-    <div style="font-family:'Bebas Neue',sans-serif;font-size:48px;letter-spacing:0.05em">${projectName.toUpperCase() || 'UNTITLED'}</div>
-    <div style="font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.1em;color:#555;margin-top:8px">${state.scenes.length} Scenes · ${allCuts.length} Cuts · ${new Date().toLocaleDateString('ja-JP')}</div>
-  </div>`;
-
-  // Scene summaries
-  state.scenes.forEach((scene, si) => {
-    const dur = totalDuration(scene);
-    html += `<div style="display:flex;align-items:baseline;gap:12px;padding:6px 0;border-bottom:0.5px solid #e8e8e8">
-      <span style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.15em;color:#888">SCENE ${String(si+1).padStart(2,'0')}</span>
-      <span style="font-size:11px;font-weight:500">${scene.title || '無題'}</span>
-      <span style="font-family:'DM Mono',monospace;font-size:8px;color:#aaa;margin-left:auto">${scene.cuts.length} cuts · ${formatDuration(dur)}</span>
-    </div>`;
-  });
+  // Cover + scene list — prepended into first cut page (no separate cover page)
+  const coverHtml = `<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid #000">`
+    + `<div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.2em;text-transform:uppercase;color:#888;margin-bottom:4px">Storyboard</div>`
+    + `<div style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:0.05em">${projectName.toUpperCase() || 'UNTITLED'}</div>`
+    + `<div style="font-family:'DM Mono',monospace;font-size:8px;color:#555;margin-top:4px">${state.scenes.length} Scenes · ${allCuts.length} Cuts · ${new Date().toLocaleDateString('ja-JP')}</div>`
+    + `</div>`
+    + state.scenes.map((scene, si) => {
+        const dur = totalDuration(scene);
+        return `<div style="display:flex;align-items:baseline;gap:12px;padding:5px 0;border-bottom:0.5px solid #e8e8e8">`
+          + `<span style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.15em;color:#888">SCENE ${String(si+1).padStart(2,'0')}</span>`
+          + `<span style="font-size:11px;font-weight:500">${scene.title || '無題'}</span>`
+          + `<span style="font-family:'DM Mono',monospace;font-size:8px;color:#aaa;margin-left:auto">${scene.cuts.length} cuts · ${formatDuration(dur)}</span>`
+          + `</div>`;
+      }).join('')
+    + `<div style="margin-bottom:12px"></div>`
 
   // Cuts grid (4 per page)
   const perPage = 4;
@@ -1476,7 +1475,7 @@ body{font-family:'Noto Sans JP',sans-serif;font-weight:300;color:#000;background
   for (let p = 0; p < Math.ceil(allCuts.length / perPage); p++) {
     const pageItems = allCuts.slice(p * perPage, (p+1) * perPage);
     // page-break-before on every cut page (including first) to separate from cover
-    html += `<div class="cut-page">
+    html += (p===0 ? coverHtml : '') + `<div class="cut-page">
       <div class="page-header">
         <span class="page-title">${(state.projectName||'STORYBOARD').toUpperCase()}</span>
         <span class="page-meta">Page ${p+2} · ${new Date().toLocaleDateString('ja-JP')}</span>
