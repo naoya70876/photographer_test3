@@ -1286,57 +1286,160 @@ function exportPremiere() {
   });
   if (!allCuts.length) { showToast('カットがありません'); return; }
 
-  const totalFrames = allCuts.reduce((a,{cut}) => a + (cut.duration||4)*FPS, 0);
+  const LABEL = {WS:'2',MS:'3',CU:'4',ECU:'5',OTS:'6',POV:'7',INSERT:'8','CURVE':'1'};
 
-  // Premiere label index per shot type
-  const LABEL = {WS:'2',MS:'3',CU:'4',ECU:'5',OTS:'6',POV:'7',INSERT:'8'};
+  // Shot type RGB colors for solid bg (Premiere RGB 0-255)
+  const SOLID_RGB = {
+    WS:    [46,140,87],  MS:   [89,77,192],  CU:   [192,64,48],
+    ECU:   [204,38,38],  OTS:  [38,114,204], POV:  [128,128,128],
+    INSERT:[77,77,77],   CURVE:[217,140,26],
+  };
 
-  // Build FCP7 XML that Premiere Pro can import via File > Import
-  // Rules:
-  //   • <file> elements must appear BEFORE the <sequence> that references them,
-  //     OR be self-contained within the clipitem.
-  //   • Each <clipitem> must have a <file> child (can be inline with full content
-  //     or a reference id= after first occurrence).
-  //   • <masterclipid> must match <clipitem id>.
-  //   • <in>/<out> on clipitem are source in/out in frames; <start>/<end> are timeline.
-  //   • color-bar generator: use <generatoritem> or simply a named empty file.
+  // SVG icon paths encoded as text description for title generator
+  const SHOT_DESC = {
+    WS:'Wide Shot — Full scene establishing',
+    MS:'Medium Shot — Subject waist up',
+    CU:'Close Up — Face / detail',
+    ECU:'Extreme Close Up — Macro detail',
+    OTS:'Over the Shoulder',
+    POV:'Point of View',
+    INSERT:'Insert Shot — Detail cutaway',
+    CURVE:'Curve Move — Camera orbit/arc',
+  };
+
+  function tc(frames) {
+    const h=Math.floor(frames/FPS/3600), m=Math.floor(frames/FPS/60)%60,
+          s=Math.floor(frames/FPS)%60,   f=frames%FPS;
+    return [h,m,s,f].map(n=>String(n).padStart(2,'0')).join(':');
+  }
 
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="5">\n';
 
-  // ---- standalone <sequence> ----
-  xml += '<sequence id="seq-1">\n';
-  xml += '  <name>'+X(rawName)+'</name>\n';
+  // ── Per-cut nested sequences (appear before master sequence) ──
+  allCuts.forEach(({cut}, idx) => {
+    const dur  = (cut.duration||4) * FPS;
+    const n    = String(idx+1).padStart(2,'0');
+    const name = 'C'+n+'_'+(cut.shotType||'XX');
+    const rgb  = SOLID_RGB[cut.shotType] || [80,80,80];
+    const desc = SHOT_DESC[cut.shotType] || (cut.shotType||'Shot');
+    const note = [cut.description, cut.camera && 'Cam:'+cut.camera, cut.audio && 'Audio:'+cut.audio].filter(Boolean).join(' | ');
+
+    xml += '<sequence id="seq-cut-'+n+'">\n';
+    xml += '  <name>'+X(name)+'</name>\n';
+    xml += '  <duration>'+dur+'</duration>\n';
+    xml += '  <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
+    xml += '  <timecode><rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>';
+    xml += '<string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode>\n';
+    xml += '  <media>\n';
+    xml += '    <video>\n';
+    xml += '      <format><samplecharacteristics>';
+    xml += '<rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>';
+    xml += '<width>'+W+'</width><height>'+H+'</height>';
+    xml += '<anamorphic>FALSE</anamorphic><pixelaspectratio>square</pixelaspectratio>';
+    xml += '<fielddominance>none</fielddominance>';
+    xml += '</samplecharacteristics></format>\n';
+    xml += '      <track>\n';
+    xml += '        <enabled>TRUE</enabled><locked>FALSE</locked>\n';
+
+    // V1: Solid color background
+    xml += '        <generatoritem id="gi-bg-'+n+'">\n';
+    xml += '          <name>'+X(name+' BG')+'</name>\n';
+    xml += '          <enabled>TRUE</enabled>\n';
+    xml += '          <duration>'+dur+'</duration>\n';
+    xml += '          <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
+    xml += '          <start>0</start><end>'+dur+'</end>\n';
+    xml += '          <in>0</in><out>'+dur+'</out>\n';
+    xml += '          <effect>\n';
+    xml += '            <name>Color</name>\n';
+    xml += '            <effectid>color</effectid>\n';
+    xml += '            <effectcategory>generator</effectcategory>\n';
+    xml += '            <effecttype>generator</effecttype>\n';
+    xml += '            <mediatype>video</mediatype>\n';
+    xml += '            <parameter>\n';
+    xml += '              <parameterid>color</parameterid>\n';
+    xml += '              <name>Color</name>\n';
+    xml += '              <value><red>'+rgb[0]+'</red><green>'+rgb[1]+'</green><blue>'+rgb[2]+'</blue></value>\n';
+    xml += '            </parameter>\n';
+    xml += '          </effect>\n';
+    xml += '        </generatoritem>\n';
+
+    xml += '      </track>\n';
+
+    // V2: Shot type text overlay
+    xml += '      <track>\n';
+    xml += '        <enabled>TRUE</enabled><locked>FALSE</locked>\n';
+    xml += '        <generatoritem id="gi-txt-'+n+'">\n';
+    xml += '          <name>'+X(name+' LABEL')+'</name>\n';
+    xml += '          <enabled>TRUE</enabled>\n';
+    xml += '          <duration>'+dur+'</duration>\n';
+    xml += '          <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
+    xml += '          <start>0</start><end>'+dur+'</end>\n';
+    xml += '          <in>0</in><out>'+dur+'</out>\n';
+    xml += '          <effect>\n';
+    xml += '            <name>Text</name>\n';
+    xml += '            <effectid>text</effectid>\n';
+    xml += '            <effectcategory>generator</effectcategory>\n';
+    xml += '            <effecttype>generator</effecttype>\n';
+    xml += '            <mediatype>video</mediatype>\n';
+    // Shot type label (top-left)
+    xml += '            <parameter>\n';
+    xml += '              <parameterid>str</parameterid>\n';
+    xml += '              <name>Text</name>\n';
+    xml += '              <value>'+X(name+'\n'+desc+'\n\n'+note)+'</value>\n';
+    xml += '            </parameter>\n';
+    xml += '            <parameter>\n';
+    xml += '              <parameterid>fontsize</parameterid>\n';
+    xml += '              <name>Size</name><value>48</value>\n';
+    xml += '            </parameter>\n';
+    xml += '            <parameter>\n';
+    xml += '              <parameterid>origin</parameterid>\n';
+    xml += '              <name>Origin</name>\n';
+    xml += '              <value><horiz>-0.38</horiz><vert>0.38</vert></value>\n';
+    xml += '            </parameter>\n';
+    xml += '          </effect>\n';
+    xml += '        </generatoritem>\n';
+    xml += '      </track>\n';
+
+    xml += '    </video>\n';
+    xml += '    <audio><numOutputChannels>2</numOutputChannels>';
+    xml += '<track><enabled>TRUE</enabled><locked>FALSE</locked></track></audio>\n';
+    xml += '  </media>\n';
+    xml += '  <markers><marker>';
+    xml += '<name>'+X('C'+n)+'</name>';
+    xml += '<comment>'+X(note)+'</comment>';
+    xml += '<in>0</in><out>0</out>';
+    xml += '</marker></markers>\n';
+    xml += '</sequence>\n\n';
+  });
+
+  // ── Master sequence — references nested cut sequences ──
+  const totalFrames = allCuts.reduce((a,{cut})=>a+(cut.duration||4)*FPS,0);
+  xml += '<sequence id="seq-master">\n';
+  xml += '  <name>'+X('MASTER_'+rawName)+'</name>\n';
   xml += '  <duration>'+totalFrames+'</duration>\n';
   xml += '  <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
-  xml += '  <timecode>\n';
-  xml += '    <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
-  xml += '    <string>00:00:00:00</string><frame>0</frame>\n';
-  xml += '    <displayformat>NDF</displayformat>\n';
-  xml += '  </timecode>\n';
+  xml += '  <timecode><rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>';
+  xml += '<string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode>\n';
   xml += '  <media>\n';
   xml += '    <video>\n';
-  xml += '      <format>\n';
-  xml += '        <samplecharacteristics>\n';
-  xml += '          <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
-  xml += '          <width>'+W+'</width><height>'+H+'</height>\n';
-  xml += '          <anamorphic>FALSE</anamorphic>\n';
-  xml += '          <pixelaspectratio>square</pixelaspectratio>\n';
-  xml += '          <fielddominance>none</fielddominance>\n';
-  xml += '        </samplecharacteristics>\n';
-  xml += '      </format>\n';
+  xml += '      <format><samplecharacteristics>';
+  xml += '<rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>';
+  xml += '<width>'+W+'</width><height>'+H+'</height>';
+  xml += '<anamorphic>FALSE</anamorphic><pixelaspectratio>square</pixelaspectratio>';
+  xml += '<fielddominance>none</fielddominance>';
+  xml += '</samplecharacteristics></format>\n';
   xml += '      <track>\n';
   xml += '        <enabled>TRUE</enabled><locked>FALSE</locked>\n';
 
   let offset = 0;
   allCuts.forEach(({cut}, idx) => {
-    const dur   = (cut.duration||4) * FPS;
-    const n     = String(idx+1).padStart(2,'0');
-    const name  = 'C'+n+' '+(SHOT_NAMES[cut.shotType]||cut.shotType||'Shot');
-    const note  = [cut.description, cut.camera&&'Cam:'+cut.camera, cut.audio&&'Audio:'+cut.audio].filter(Boolean).join(' | ');
-    const fid   = 'file-'+n;
-    const ciid  = 'ci-'+n;
+    const dur  = (cut.duration||4) * FPS;
+    const n    = String(idx+1).padStart(2,'0');
+    const name = 'C'+n+'_'+(cut.shotType||'XX');
+    const ciid = 'ci-master-'+n;
     const label = LABEL[cut.shotType] || '0';
 
+    // Each clipitem references the nested cut sequence via <sequence> linkage
     xml += '        <clipitem id="'+ciid+'">\n';
     xml += '          <masterclipid>'+ciid+'</masterclipid>\n';
     xml += '          <name>'+X(name)+'</name>\n';
@@ -1345,51 +1448,41 @@ function exportPremiere() {
     xml += '          <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
     xml += '          <start>'+offset+'</start>\n';
     xml += '          <end>'+(offset+dur)+'</end>\n';
-    xml += '          <in>0</in>\n';
-    xml += '          <out>'+dur+'</out>\n';
-    // Inline file element — required for Premiere to accept the clip
-    xml += '          <file id="'+fid+'">\n';
+    xml += '          <in>0</in><out>'+dur+'</out>\n';
+    // Link to nested sequence as file source
+    xml += '          <file id="file-'+n+'">\n';
     xml += '            <name>'+X(name)+'</name>\n';
     xml += '            <pathurl></pathurl>\n';
     xml += '            <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
     xml += '            <duration>'+dur+'</duration>\n';
-    xml += '            <timecode>\n';
-    xml += '              <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
-    xml += '              <string>00:00:00:00</string><frame>0</frame>\n';
-    xml += '              <displayformat>NDF</displayformat>\n';
-    xml += '            </timecode>\n';
+    xml += '            <timecode><rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>';
+    xml += '<string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode>\n';
     xml += '            <media><video><duration>'+dur+'</duration>\n';
-    xml += '              <samplecharacteristics>\n';
-    xml += '                <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
-    xml += '                <width>'+W+'</width><height>'+H+'</height>\n';
-    xml += '              </samplecharacteristics>\n';
+    xml += '              <samplecharacteristics><rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>';
+    xml += '<width>'+W+'</width><height>'+H+'</height></samplecharacteristics>\n';
     xml += '            </video></media>\n';
     xml += '          </file>\n';
+    xml += '          <sourcetrack><mediatype>video</mediatype><trackindex>1</trackindex></sourcetrack>\n';
     xml += '          <labels><label2>'+label+'</label2></labels>\n';
-    xml += '          <comments><mastercomment1>'+X(note)+'</mastercomment1></comments>\n';
+    xml += '          <comments><mastercomment1>'+X([cut.description, cut.camera&&'Cam:'+cut.camera, cut.audio&&'Audio:'+cut.audio].filter(Boolean).join(' | '))+'</mastercomment1></comments>\n';
     xml += '        </clipitem>\n';
     offset += dur;
   });
 
-  xml += '      </track>\n';
-  xml += '    </video>\n';
-  xml += '    <audio>\n';
-  xml += '      <numOutputChannels>2</numOutputChannels>\n';
-  xml += '      <track><enabled>TRUE</enabled><locked>FALSE</locked></track>\n';
-  xml += '    </audio>\n';
+  xml += '      </track>\n    </video>\n';
+  xml += '    <audio><numOutputChannels>2</numOutputChannels>';
+  xml += '<track><enabled>TRUE</enabled><locked>FALSE</locked></track></audio>\n';
   xml += '  </media>\n';
 
-  // sequence-level markers
+  // Master markers
   xml += '  <markers>\n';
   offset = 0;
   allCuts.forEach(({cut}, idx) => {
     const dur = (cut.duration||4)*FPS;
     const n   = String(idx+1).padStart(2,'0');
-    xml += '    <marker>\n';
-    xml += '      <name>'+X('C'+n+' '+(cut.shotType||''))+'</name>\n';
-    xml += '      <comment>'+X(cut.description||'')+'</comment>\n';
-    xml += '      <in>'+offset+'</in><out>'+offset+'</out>\n';
-    xml += '    </marker>\n';
+    xml += '  <marker><name>'+X('C'+n+' '+(cut.shotType||''))+'</name>';
+    xml += '<comment>'+X(cut.description||'')+'</comment>';
+    xml += '<in>'+offset+'</in><out>'+offset+'</out></marker>\n';
     offset += dur;
   });
   xml += '  </markers>\n';
@@ -1400,7 +1493,6 @@ function exportPremiere() {
   showToast('Premiere XML を書き出しました');
   closeExportModal();
 }
-
 function escXML(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
 }
@@ -1424,108 +1516,148 @@ function generatePrintView(projectName) {
     });
   });
 
+  const SHOT_NAMES_PDF = {
+    'WS':'Wide Shot','MS':'Medium Shot','CU':'Close Up','ECU':'Extreme Close Up',
+    'OTS':'Over the Shoulder','POV':'Point of View','INSERT':'Insert Shot','CURVE':'Curve Move'
+  };
+
+  // Same SVG icons as app UI, but rendered white-on-black
+  function svgIcon(type) {
+    const s = 'stroke="white" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"';
+    const icons = {
+      'WS':    `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}><rect x="4" y="4" width="56" height="34" rx="2"/><line x1="4" y1="21" x2="60" y2="21" stroke-dasharray="3 3" opacity="0.35"/><line x1="32" y1="4" x2="32" y2="38" stroke-dasharray="3 3" opacity="0.35"/><circle cx="32" cy="21" r="7"/><circle cx="32" cy="21" r="2" fill="white" stroke="none" opacity="0.4"/></svg>`,
+      'MS':    `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}><rect x="4" y="4" width="56" height="34" rx="2"/><ellipse cx="32" cy="22" rx="9" ry="14"/><line x1="32" y1="8" x2="32" y2="38" stroke-dasharray="3 3" opacity="0.3"/></svg>`,
+      'CU':    `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}><rect x="4" y="4" width="56" height="34" rx="2"/><circle cx="32" cy="21" r="13"/><circle cx="32" cy="21" r="4" fill="white" stroke="none" opacity="0.35"/><line x1="19" y1="21" x2="45" y2="21" opacity="0.25"/><line x1="32" y1="8" x2="32" y2="34" opacity="0.25"/></svg>`,
+      'ECU':   `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}><rect x="4" y="4" width="56" height="34" rx="2"/><circle cx="32" cy="21" r="18"/><circle cx="32" cy="21" r="6" fill="white" stroke="none" opacity="0.3"/><line x1="4" y1="21" x2="60" y2="21" opacity="0.2"/><line x1="32" y1="4" x2="32" y2="38" opacity="0.2"/></svg>`,
+      'OTS':   `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}><rect x="4" y="4" width="56" height="34" rx="2"/><ellipse cx="17" cy="34" rx="10" ry="8"/><line x1="17" y1="26" x2="17" y2="14"/><ellipse cx="17" cy="12" rx="5" ry="5"/><rect x="30" y="10" width="24" height="22" rx="1" opacity="0.5"/><ellipse cx="42" cy="21" rx="5" ry="7" opacity="0.7"/></svg>`,
+      'POV':   `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}><rect x="4" y="4" width="56" height="34" rx="2"/><path d="M4 38 Q32 6 60 38" opacity="0.5"/><path d="M14 38 Q32 14 50 38" opacity="0.7"/><circle cx="32" cy="30" r="4"/><line x1="32" y1="4" x2="32" y2="26" stroke-dasharray="2 3" opacity="0.5"/></svg>`,
+      'INSERT':`<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}><rect x="4" y="4" width="56" height="34" rx="2" opacity="0.4"/><rect x="18" y="10" width="28" height="22" rx="1"/><line x1="4" y1="4" x2="18" y2="10" stroke-dasharray="2 2" opacity="0.4"/><line x1="60" y1="4" x2="46" y2="10" stroke-dasharray="2 2" opacity="0.4"/><line x1="4" y1="38" x2="18" y2="32" stroke-dasharray="2 2" opacity="0.4"/><line x1="60" y1="38" x2="46" y2="32" stroke-dasharray="2 2" opacity="0.4"/></svg>`,
+      'CURVE': `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}><rect x="4" y="4" width="56" height="34" rx="2"/><path d="M10 32 C18 10 30 28 42 16 C48 10 54 14 58 10" stroke-dasharray="4 2"/><polygon points="58,10 53,12 55,17" fill="white" stroke="none" opacity="0.6"/><circle cx="10" cy="32" r="2.5" fill="white" stroke="none" opacity="0.5"/></svg>`,
+    };
+    const fallback = `<svg viewBox="0 0 64 42" xmlns="http://www.w3.org/2000/svg" ${s}><rect x="4" y="4" width="56" height="34" rx="2"/></svg>`;
+    return icons[type] || fallback;
+  }
+
+  const perPage = 4;
+  const totalPages = Math.ceil(allCuts.length / perPage);
+  const date = new Date().toLocaleDateString('ja-JP');
+
   let html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
 <title>${projectName} — 絵コンテ</title>
-<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
-@page { size: A4; margin: 15mm; }
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Noto Sans JP',sans-serif;font-weight:300;color:#000;background:#fff;font-size:11px}
-.page-header{display:flex;align-items:baseline;border-bottom:1.5px solid #000;padding-bottom:8px;margin-bottom:16px}
-.page-title{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:0.05em;flex:1}
-.page-meta{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;color:#555}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:0;border-top:0.5px solid #000;border-left:0.5px solid #000}
-.card{border-right:0.5px solid #000;border-bottom:0.5px solid #000;page-break-inside:avoid}
-.thumb{height:90px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;border-bottom:0.5px solid #000;position:relative}
-.shot-big{font-family:'Bebas Neue',sans-serif;font-size:36px;letter-spacing:0.05em;color:#ddd}
-.badge-num{position:absolute;top:6px;left:7px;font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;background:#000;color:#fff;padding:2px 7px}
-.badge-scene{position:absolute;top:6px;right:7px;font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.1em;color:#888}
-.body{padding:8px 10px}
-.row{display:flex;gap:8px;margin-bottom:5px;align-items:center}
-.label{font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.12em;color:#888;text-transform:uppercase;width:48px;flex-shrink:0}
-.value{font-size:10px;font-weight:400}
-.sep{border-top:0.5px solid #e8e8e8;margin:5px 0}
-.desc{font-size:10px;line-height:1.6;color:#333}
-.cut-page{page-break-before:always;margin-top:0}.cut-page:first-of-type{page-break-before:auto}
-.page-footer{margin-top:12px;border-top:0.5px solid #ccc;padding-top:6px;display:flex;justify-content:space-between}
-.pf{font-family:'DM Mono',monospace;font-size:8px;color:#aaa;letter-spacing:0.08em}
-@media print{.no-print{display:none}}
-</style>
-</head><body>`;
+@page { size: A4 landscape; margin: 12mm 14mm; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #fff; color: #000; font-family: 'Noto Sans JP', sans-serif; font-weight: 300; font-size: 11px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.page { page-break-before: always; display: flex; flex-direction: column; min-height: 182mm; }
+.page:first-child { page-break-before: auto; }
+.ph { display: flex; align-items: baseline; border-bottom: 1px solid #000; padding-bottom: 6px; margin-bottom: 10px; gap: 12px; }
+.ph-proj { font-family: 'Bebas Neue', sans-serif; font-size: 18px; letter-spacing: 0.06em; flex: 1; }
+.ph-meta { font-family: 'DM Mono', monospace; font-size: 8px; letter-spacing: 0.1em; color: #888; }
+.cover { margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #e0e0e0; }
+.cover-title { font-family: 'Bebas Neue', sans-serif; font-size: 28px; letter-spacing: 0.05em; margin-bottom: 2px; }
+.cover-sub { font-family: 'DM Mono', monospace; font-size: 8px; letter-spacing: 0.12em; color: #666; }
+.scene-row { display: flex; align-items: baseline; gap: 10px; padding: 4px 0; border-bottom: 0.5px solid #ebebeb; font-size: 10px; }
+.scene-num { font-family: 'DM Mono', monospace; font-size: 7px; letter-spacing: 0.15em; color: #aaa; }
+.scene-title { font-weight: 500; flex: 1; }
+.scene-stat { font-family: 'DM Mono', monospace; font-size: 7px; color: #bbb; }
+.spacer { height: 10px; }
+/* Grid — 4 columns to match app screenshot */
+.grid { display: grid; grid-template-columns: repeat(4, 1fr); flex: 1; border-top: 0.5px solid #ccc; border-left: 0.5px solid #ccc; }
+.card { border-right: 0.5px solid #ccc; border-bottom: 0.5px solid #ccc; display: flex; flex-direction: column; break-inside: avoid; page-break-inside: avoid; }
+/* Black thumbnail — matches app UI */
+.thumb {
+  background: #000;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  position: relative;
+  height: 76px;
+  gap: 5px;
+}
+.thumb svg { width: 70px; height: 46px; }
+.thumb-name {
+  font-family: 'DM Mono', monospace; font-size: 6.5px; letter-spacing: 0.14em;
+  text-transform: uppercase; color: #666;
+}
+.badge-cut {
+  position: absolute; top: 5px; left: 6px;
+  background: #fff; color: #000;
+  font-family: 'DM Mono', monospace; font-size: 6.5px; letter-spacing: 0.08em; padding: 1px 5px;
+}
+.badge-sc {
+  position: absolute; top: 5px; right: 6px;
+  font-family: 'DM Mono', monospace; font-size: 6.5px; color: #555;
+}
+/* Info block */
+.info { padding: 6px 8px; flex: 1; border-top: 0.5px solid #222; }
+.row { display: flex; gap: 5px; margin-bottom: 2px; align-items: baseline; }
+.lbl { font-family: 'DM Mono', monospace; font-size: 6.5px; letter-spacing: 0.1em; color: #aaa; text-transform: uppercase; width: 44px; flex-shrink: 0; }
+.val { font-family: 'DM Mono', monospace; font-size: 7.5px; color: #000; }
+.sep { border-top: 0.5px solid #ebebeb; margin: 4px 0; }
+.desc { font-size: 8px; line-height: 1.5; color: #333; margin-bottom: 2px; }
+.dialogue { font-style: italic; font-size: 7.5px; color: #555; }
+.audio-ln { font-family: 'DM Mono', monospace; font-size: 6.5px; color: #aaa; margin-top: 2px; }
+.pf { display: flex; justify-content: space-between; margin-top: 6px; padding-top: 5px; border-top: 0.5px solid #ccc; }
+.pf span { font-family: 'DM Mono', monospace; font-size: 7px; color: #bbb; letter-spacing: 0.08em; }
+@media print { .no-print { display: none; } }
+</style></head><body>`;
 
-  // Cover + scene list — prepended into first cut page (no separate cover page)
-  const coverHtml = `<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid #000">`
-    + `<div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.2em;text-transform:uppercase;color:#888;margin-bottom:4px">Storyboard</div>`
-    + `<div style="font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:0.05em">${projectName.toUpperCase() || 'UNTITLED'}</div>`
-    + `<div style="font-family:'DM Mono',monospace;font-size:8px;color:#555;margin-top:4px">${state.scenes.length} Scenes · ${allCuts.length} Cuts · ${new Date().toLocaleDateString('ja-JP')}</div>`
-    + `</div>`
-    + state.scenes.map((scene, si) => {
+  for (let p = 0; p < totalPages; p++) {
+    const items = allCuts.slice(p * perPage, (p+1) * perPage);
+    html += `<div class="page">`;
+    // Page header
+    html += `<div class="ph"><span class="ph-proj">${(projectName||'STORYBOARD').toUpperCase()}</span><span class="ph-meta">Page ${p+1} / ${totalPages} · ${date}</span></div>`;
+    // Cover info on page 1
+    if (p === 0) {
+      html += `<div class="cover"><div class="cover-title">${(projectName||'STORYBOARD').toUpperCase()}</div><div class="cover-sub">${state.scenes.length} Scenes · ${allCuts.length} Cuts · ${date}</div></div>`;
+      state.scenes.forEach((scene, si) => {
         const dur = totalDuration(scene);
-        return `<div style="display:flex;align-items:baseline;gap:12px;padding:5px 0;border-bottom:0.5px solid #e8e8e8">`
-          + `<span style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.15em;color:#888">SCENE ${String(si+1).padStart(2,'0')}</span>`
-          + `<span style="font-size:11px;font-weight:500">${scene.title || '無題'}</span>`
-          + `<span style="font-family:'DM Mono',monospace;font-size:8px;color:#aaa;margin-left:auto">${scene.cuts.length} cuts · ${formatDuration(dur)}</span>`
-          + `</div>`;
-      }).join('')
-    + `<div style="margin-bottom:12px"></div>`
-
-  // Cuts grid (4 per page)
-  const perPage = 4;
-  const totalPages = Math.ceil(allCuts.length / perPage) + 1; // +1 for cover
-  for (let p = 0; p < Math.ceil(allCuts.length / perPage); p++) {
-    const pageItems = allCuts.slice(p * perPage, (p+1) * perPage);
-    // page-break-before on every cut page (including first) to separate from cover
-    html += (p===0 ? coverHtml : '') + `<div class="cut-page">
-      <div class="page-header">
-        <span class="page-title">${(state.projectName||'STORYBOARD').toUpperCase()}</span>
-        <span class="page-meta">Page ${p+2} · ${new Date().toLocaleDateString('ja-JP')}</span>
-      </div>
-      <div class="grid">`;
-
-    pageItems.forEach(({scene, cut, sceneIdx, cutIdx}) => {
-      const shotLabel = cut.shotType||'—';
+        html += `<div class="scene-row"><span class="scene-num">SCENE ${String(si+1).padStart(2,'0')}</span><span class="scene-title">${scene.title||'無題'}</span><span class="scene-stat">${scene.cuts.length} cuts · ${formatDuration(dur)}</span></div>`;
+      });
+      html += `<div class="spacer"></div>`;
+    }
+    // 4-column grid
+    html += `<div class="grid">`;
+    items.forEach(({scene, cut, sceneIdx, cutIdx}) => {
+      const shotLabel = SHOT_NAMES_PDF[cut.shotType] || cut.shotType || '—';
       html += `<div class="card">
         <div class="thumb">
-          <div class="shot-big">${shotLabel}</div>
-          <span class="badge-num">C-${String(cutIdx).padStart(2,'0')}</span>
-          <span class="badge-scene">SC${String(sceneIdx).padStart(2,'0')}</span>
+          ${svgIcon(cut.shotType)}
+          <div class="thumb-name">${shotLabel}</div>
+          <span class="badge-cut">C-${String(cutIdx).padStart(2,'0')}</span>
+          <span class="badge-sc">SC${String(sceneIdx).padStart(2,'0')}</span>
         </div>
-        <div class="body">
-          <div class="row"><span class="label">Shot</span><span class="value">${shotLabel}</span></div>
-          <div class="row"><span class="label">Camera</span><span class="value">${cut.camera||'—'}</span></div>
-          <div class="row"><span class="label">Lens</span><span class="value">${cut.lens||'—'}mm</span></div>
-          <div class="row"><span class="label">Duration</span><span class="value">${cut.duration||'—'}s</span></div>
+        <div class="info">
+          <div class="row"><span class="lbl">Shot</span><span class="val">${cut.shotType||'—'}</span></div>
+          <div class="row"><span class="lbl">Camera</span><span class="val">${cut.camera||'—'}</span></div>
+          <div class="row"><span class="lbl">Lens</span><span class="val">${cut.lens||'—'}mm</span></div>
+          <div class="row"><span class="lbl">Duration</span><span class="val">${cut.duration||'—'}s</span></div>
           <div class="sep"></div>
           <div class="desc">${cut.description||'—'}</div>
-          ${cut.dialogue?`<div class="sep"></div><div style="font-style:italic;font-size:10px;color:#555">"${cut.dialogue}"</div>`:''}
-          ${cut.audio?`<div style="font-family:'DM Mono',monospace;font-size:8px;color:#888;margin-top:5px;letter-spacing:0.06em">♪ ${cut.audio}</div>`:''}
+          ${cut.dialogue ? `<div class="dialogue">"${cut.dialogue}"</div>` : ''}
+          ${cut.audio    ? `<div class="audio-ln">♪ ${cut.audio}</div>` : ''}
         </div>
       </div>`;
     });
-
-    html += `</div>
-      <div class="page-footer">
-        <span class="pf">${state.projectName || 'STORYBOARD'} · CONFIDENTIAL</span>
-        <span class="pf">${p+2} / ${totalPages}</span>
-      </div>
-    </div>`;
+    // Fill empty slots (keep grid borders intact)
+    for (let e = items.length; e < perPage; e++) {
+      html += `<div class="card" style="background:#fafafa"></div>`;
+    }
+    html += `</div>`;
+    html += `<div class="pf"><span>${projectName||'STORYBOARD'} · CONFIDENTIAL</span><span>${p+1} / ${totalPages}</span></div>`;
+    html += `</div>`;
   }
 
-  html += `<div class="no-print" style="position:fixed;bottom:20px;right:20px">
+  html += `<div class="no-print" style="position:fixed;bottom:20px;right:20px;display:flex;gap:8px">
     <button onclick="window.print()" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;padding:10px 20px;background:#000;color:#fff;border:none;cursor:pointer">Print / Save PDF</button>
-    <button onclick="window.close()" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;padding:10px 20px;background:#fff;color:#000;border:1px solid #000;cursor:pointer;margin-left:8px">Close</button>
-  </div>
-  </body></html>`;
+    <button onclick="window.close()" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;padding:10px 20px;background:#fff;color:#000;border:1px solid #000;cursor:pointer">Close</button>
+  </div></body></html>`;
 
   const w = window.open('', '_blank');
   w.document.write(html);
   w.document.close();
   showToast('印刷プレビューを開きました');
 }
-
-// ================================================================
-//  HELPERS
-// ================================================================
 function activeScene() { return state.scenes.find(s => s.id === state.activeSceneId) || null; }
 function activeCut() {
   const scene = activeScene();
