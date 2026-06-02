@@ -736,6 +736,20 @@ let state = {
 
 const SHOT_TYPES = ['WS','MS','CU','ECU','OTS','POV','INSERT','CURVE'];
 const CAMERA_MOVES = ['STATIC','PAN RIGHT','PAN LEFT','ZOOM IN','ZOOM OUT','TILT UP','TILT DOWN','ORBIT','SLIDE LEFT','SLIDE RIGHT','HANDHELD','DOLLY IN','DOLLY OUT'];
+// Converts legacy Japanese or any value to uppercase English for display
+const CAMERA_EN = {
+  'STATIC':'STATIC','PAN RIGHT':'PAN RIGHT','PAN LEFT':'PAN LEFT',
+  'ZOOM IN':'ZOOM IN','ZOOM OUT':'ZOOM OUT','TILT UP':'TILT UP','TILT DOWN':'TILT DOWN',
+  'ORBIT':'ORBIT','SLIDE LEFT':'SLIDE LEFT','SLIDE RIGHT':'SLIDE RIGHT',
+  'HANDHELD':'HANDHELD','DOLLY IN':'DOLLY IN','DOLLY OUT':'DOLLY OUT',
+  '固定':'STATIC','右パン':'PAN RIGHT','左パン':'PAN LEFT',
+  'ズームイン':'ZOOM IN','ズームアウト':'ZOOM OUT',
+  'ティルトアップ':'TILT UP','ティルトダウン':'TILT DOWN',
+  'オービット':'ORBIT','スライダー左':'SLIDE LEFT',
+  'スライダー右':'SLIDE RIGHT','ハンドヘルド':'HANDHELD',
+  'ドリー前進':'DOLLY IN','ドリー後退':'DOLLY OUT',
+};
+function camEN(v) { return CAMERA_EN[v] || (v ? v.toUpperCase() : ''); }
 
 // Shot type full names
 const SHOT_NAMES = {
@@ -882,7 +896,7 @@ function renderMainCanvas() {
       <div class="cut-body">
         <div class="cut-header">
           <span class="cut-number">C-${String(i+1).padStart(2,'0')}</span>
-          <span class="cut-shot">${cut.camera || ''}</span>
+          <span class="cut-shot">${camEN(cut.camera)}</span>
         </div>
         <div class="cut-label">${esc(cut.description || '説明なし')}</div>
         <div class="cut-info">${cut.duration || 0}s · ${cut.audio || '—'}</div>
@@ -1761,7 +1775,7 @@ body { background: #fff; color: #000; font-family: 'Noto Sans JP', sans-serif; f
         </div>
         <div class="info">
           <div class="row"><span class="lbl">Shot</span><span class="val">${cut.shotType||'—'}</span></div>
-          <div class="row"><span class="lbl">Camera</span><span class="val">${cut.camera||'—'}</span></div>
+          <div class="row"><span class="lbl">Camera</span><span class="val">${camEN(cut.camera)||'—'}</span></div>
           <div class="row"><span class="lbl">Lens</span><span class="val">${cut.lens||'—'}mm</span></div>
           <div class="row"><span class="lbl">Duration</span><span class="val">${cut.duration||'—'}s</span></div>
           <div class="sep"></div>
