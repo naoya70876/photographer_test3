@@ -735,7 +735,7 @@ let state = {
 };
 
 const SHOT_TYPES = ['WS','MS','CU','ECU','OTS','POV','INSERT','CURVE'];
-const CAMERA_MOVES = ['固定','右パン','左パン','ズームイン','ズームアウト','ティルトアップ','ティルトダウン','オービット','スライダー左','スライダー右','ハンドヘルド','ドリー前進','ドリー後退'];
+const CAMERA_MOVES = ['STATIC','PAN RIGHT','PAN LEFT','ZOOM IN','ZOOM OUT','TILT UP','TILT DOWN','ORBIT','SLIDE LEFT','SLIDE RIGHT','HANDHELD','DOLLY IN','DOLLY OUT'];
 
 // Shot type full names
 const SHOT_NAMES = {
@@ -1004,7 +1004,7 @@ function addCut() {
   const id = uid();
   const num = scene.cuts.length + 1;
   scene.cuts.push({
-    id, shotType: 'MS', camera: '固定', duration: 4, lens: 35,
+    id, shotType: 'MS', camera: 'STATIC', duration: 4, lens: 35,
     description: '', audio: '', dialogue: ''
   });
   state.activeCutId = id;
@@ -1089,7 +1089,7 @@ async function runAiSuggest() {
 [
   {
     "shotType": "WS|MS|CU|ECU|OTS|POV|INSERT|CURVE のいずれか",
-    "camera": "固定|右パン|左パン|ズームイン|ズームアウト|ティルトアップ|ティルトダウン|オービット|スライダー左|スライダー右|ハンドヘルド|ドリー前進|ドリー後退 のいずれか",
+    "camera": "STATIC|PAN RIGHT|PAN LEFT|ZOOM IN|ZOOM OUT|TILT UP|TILT DOWN|ORBIT|SLIDE LEFT|SLIDE RIGHT|HANDHELD|DOLLY IN|DOLLY OUT",
     "duration": 数字（秒）,
     "lens": 数字（mm、14〜200）,
     "description": "カットの説明（日本語、30字以内）",
@@ -1109,7 +1109,7 @@ async function runAiSuggest() {
       scene.cuts.push({
         id: uid(),
         shotType: c.shotType || 'MS',
-        camera: c.camera || '固定',
+        camera: c.camera || 'STATIC',
         duration: c.duration || 4,
         lens: c.lens || 35,
         description: c.description || '',
@@ -1197,7 +1197,7 @@ function exportAE() {
     const label = 'C'+n+'_'+ascii;           // ASCII-only comp name
     const col   = SHOT_COL[cut.shotType] || '[0.4,0.4,0.4]';
     const dur   = cut.duration || 4;
-    const move  = cut.camera || '固定';
+    const move  = cut.camera || 'STATIC';
     const vC    = 'c'+idx, vCam='cam'+idx, vML='ml'+idx, vP='p'+idx;
 
     // cut comp + solid bg
@@ -1208,35 +1208,35 @@ function exportAE() {
     lines.push('var '+vCam+'='+vC+'.layers.addCamera("CAM",[W/2,H/2]);');
     const Z0=-1777, PAN=400, TILT=300, ZN=-800, ZF=-2800;
 
-    if (['固定','ハンドヘルド'].includes(move)) {
+    if (['STATIC','HANDHELD'].includes(move)) {
       lines.push(vCam+'.property("Transform").property("Position").setValue([W/2,H/2,'+Z0+']);');
     } else {
       lines.push('var '+vP+'='+vCam+'.property("Transform").property("Position");');
-      if (move==='右パン'||move==='スライダー右') {
+      if (move==='PAN RIGHT'||move==='SLIDE RIGHT') {
         lines.push(vP+'.setValueAtTime(0,[W/2-'+PAN+',H/2,'+Z0+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2+'+PAN+',H/2,'+Z0+']);');
-      } else if (move==='左パン'||move==='スライダー左') {
+      } else if (move==='PAN LEFT'||move==='SLIDE LEFT') {
         lines.push(vP+'.setValueAtTime(0,[W/2+'+PAN+',H/2,'+Z0+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2-'+PAN+',H/2,'+Z0+']);');
-      } else if (move==='ズームイン'||cut.shotType==='CU'||cut.shotType==='ECU') {
+      } else if (move==='ZOOM IN'||cut.shotType==='CU'||cut.shotType==='ECU') {
         lines.push(vP+'.setValueAtTime(0,[W/2,H/2,'+ZF+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2,H/2,'+ZN+']);');
-      } else if (move==='ズームアウト') {
+      } else if (move==='ZOOM OUT') {
         lines.push(vP+'.setValueAtTime(0,[W/2,H/2,'+ZN+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2,H/2,'+ZF+']);');
-      } else if (move==='ティルトアップ') {
+      } else if (move==='TILT UP') {
         lines.push(vP+'.setValueAtTime(0,[W/2,H/2+'+TILT+','+Z0+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2,H/2-'+TILT+','+Z0+']);');
-      } else if (move==='ティルトダウン') {
+      } else if (move==='TILT DOWN') {
         lines.push(vP+'.setValueAtTime(0,[W/2,H/2-'+TILT+','+Z0+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2,H/2+'+TILT+','+Z0+']);');
-      } else if (move==='ドリー前進') {
+      } else if (move==='DOLLY IN') {
         lines.push(vP+'.setValueAtTime(0,[W/2,H/2,'+ZF+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2,H/2,'+Z0+']);');
-      } else if (move==='ドリー後退') {
+      } else if (move==='DOLLY OUT') {
         lines.push(vP+'.setValueAtTime(0,[W/2,H/2,'+Z0+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2,H/2,'+ZF+']);');
-      } else if (move==='オービット'||cut.shotType==='CURVE') {
+      } else if (move==='ORBIT'||cut.shotType==='CURVE') {
         const R=900;
         for (let k=0;k<=8;k++){
           const t=(dur/8*k).toFixed(3);
