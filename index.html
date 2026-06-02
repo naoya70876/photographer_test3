@@ -735,7 +735,7 @@ let state = {
 };
 
 const SHOT_TYPES = ['WS','MS','CU','ECU','OTS','POV','INSERT','CURVE'];
-const CAMERA_MOVES = ['固定','右パン','左パン','ズームイン','ズームアウト','ティルトアップ','ティルトダウン','オービット','スライダー左','スライダー右','ハンドヘルド','ドリー前進','ドリー後退'];
+const CAMERA_MOVES = ['STATIC','PAN RIGHT','PAN LEFT','ZOOM IN','ZOOM OUT','TILT UP','TILT DOWN','ORBIT','SLIDE LEFT','SLIDE RIGHT','HANDHELD','DOLLY IN','DOLLY OUT'];
 
 // Shot type full names
 const SHOT_NAMES = {
@@ -1004,7 +1004,7 @@ function addCut() {
   const id = uid();
   const num = scene.cuts.length + 1;
   scene.cuts.push({
-    id, shotType: 'MS', camera: '固定', duration: 4, lens: 35,
+    id, shotType: 'MS', camera: 'STATIC', duration: 4, lens: 35,
     description: '', audio: '', dialogue: ''
   });
   state.activeCutId = id;
@@ -1089,7 +1089,7 @@ async function runAiSuggest() {
 [
   {
     "shotType": "WS|MS|CU|ECU|OTS|POV|INSERT|CURVE のいずれか",
-    "camera": "固定|右パン|左パン|ズームイン|ズームアウト|ティルトアップ|ティルトダウン|オービット|スライダー左|スライダー右|ハンドヘルド|ドリー前進|ドリー後退 のいずれか",
+    "camera": "STATIC|PAN RIGHT|PAN LEFT|ZOOM IN|ZOOM OUT|TILT UP|TILT DOWN|ORBIT|SLIDE LEFT|SLIDE RIGHT|HANDHELD|DOLLY IN|DOLLY OUT のいずれか",
     "duration": 数字（秒）,
     "lens": 数字（mm、14〜200）,
     "description": "カットの説明（日本語、30字以内）",
@@ -1109,7 +1109,7 @@ async function runAiSuggest() {
       scene.cuts.push({
         id: uid(),
         shotType: c.shotType || 'MS',
-        camera: c.camera || '固定',
+        camera: c.camera || 'STATIC',
         duration: c.duration || 4,
         lens: c.lens || 35,
         description: c.description || '',
@@ -1197,7 +1197,7 @@ function exportAE() {
     const label = 'C'+n+'_'+ascii;           // ASCII-only comp name
     const col   = SHOT_COL[cut.shotType] || '[0.4,0.4,0.4]';
     const dur   = cut.duration || 4;
-    const move  = cut.camera || '固定';
+    const move  = cut.camera || 'STATIC';
     const vC    = 'c'+idx, vCam='cam'+idx, vML='ml'+idx, vP='p'+idx;
 
     // cut comp + solid bg
@@ -1208,7 +1208,7 @@ function exportAE() {
     lines.push('var '+vCam+'='+vC+'.layers.addCamera("CAM",[W/2,H/2]);');
     const Z0=-1777, PAN=400, TILT=300, ZN=-800, ZF=-2800;
 
-    if (['固定','ハンドヘルド'].includes(move)) {
+    if (['STATIC','HANDHELD'].includes(move)) {
       lines.push(vCam+'.property("Transform").property("Position").setValue([W/2,H/2,'+Z0+']);');
     } else {
       lines.push('var '+vP+'='+vCam+'.property("Transform").property("Position");');
@@ -1648,20 +1648,6 @@ function generatePrintView(projectName) {
     });
   });
 
-  const CAMERA_EN = {
-    'STATIC':'STATIC','PAN RIGHT':'PAN RIGHT','PAN LEFT':'PAN LEFT',
-    'ZOOM IN':'ZOOM IN','ZOOM OUT':'ZOOM OUT','TILT UP':'TILT UP','TILT DOWN':'TILT DOWN',
-    'ORBIT':'ORBIT','SLIDE LEFT':'SLIDE LEFT','SLIDE RIGHT':'SLIDE RIGHT',
-    'HANDHELD':'HANDHELD','DOLLY IN':'DOLLY IN','DOLLY OUT':'DOLLY OUT',
-    // legacy Japanese → English fallback
-    '固定':'STATIC','右パン':'PAN RIGHT','左パン':'PAN LEFT',
-    'ズームイン':'ZOOM IN','ズームアウト':'ZOOM OUT',
-    'ティルトアップ':'TILT UP','ティルトダウン':'TILT DOWN',
-    'オービット':'ORBIT','スライダー左':'SLIDE LEFT',
-    'スライダー右':'SLIDE RIGHT','ハンドヘルド':'HANDHELD',
-    'ドリー前進':'DOLLY IN','ドリー後退':'DOLLY OUT',
-  };
-
   const SHOT_NAMES_PDF = {
     'WS':'Wide Shot','MS':'Medium Shot','CU':'Close Up','ECU':'Extreme Close Up',
     'OTS':'Over the Shoulder','POV':'Point of View','INSERT':'Insert Shot','CURVE':'Curve Move'
@@ -1745,7 +1731,7 @@ body { background: #fff; color: #000; font-family: 'Noto Sans JP', sans-serif; f
 .audio-ln { font-family: 'DM Mono', monospace; font-size: 6.5px; color: #aaa; margin-top: 2px; }
 .pf { display: flex; justify-content: space-between; margin-top: 6px; padding-top: 5px; border-top: 0.5px solid #ccc; }
 .pf span { font-family: 'DM Mono', monospace; font-size: 7px; color: #bbb; letter-spacing: 0.08em; }
-@media print { .no-print { display: none; } }
+@media print {}
 </style></head><body>`;
 
   for (let p = 0; p < totalPages; p++) {
@@ -1775,7 +1761,7 @@ body { background: #fff; color: #000; font-family: 'Noto Sans JP', sans-serif; f
         </div>
         <div class="info">
           <div class="row"><span class="lbl">Shot</span><span class="val">${cut.shotType||'—'}</span></div>
-          <div class="row"><span class="lbl">Camera</span><span class="val">${CAMERA_EN[cut.camera]||cut.camera||'—'}</span></div>
+          <div class="row"><span class="lbl">Camera</span><span class="val">${cut.camera||'—'}</span></div>
           <div class="row"><span class="lbl">Lens</span><span class="val">${cut.lens||'—'}mm</span></div>
           <div class="row"><span class="lbl">Duration</span><span class="val">${cut.duration||'—'}s</span></div>
           <div class="sep"></div>
@@ -1794,10 +1780,7 @@ body { background: #fff; color: #000; font-family: 'Noto Sans JP', sans-serif; f
     html += `</div>`;
   }
 
-  html += `<div class="no-print" style="position:fixed;bottom:20px;right:20px;display:flex;gap:8px">
-    <button onclick="window.print()" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;padding:10px 20px;background:#000;color:#fff;border:none;cursor:pointer">Print / Save PDF</button>
-    <button onclick="window.close()" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;padding:10px 20px;background:#fff;color:#000;border:1px solid #000;cursor:pointer">Close</button>
-  </div></body></html>`;
+  html += `</body></html>`;
 
   const w = window.open('', '_blank');
   w.document.write(html);
