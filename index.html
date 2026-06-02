@@ -1212,31 +1212,31 @@ function exportAE() {
       lines.push(vCam+'.property("Transform").property("Position").setValue([W/2,H/2,'+Z0+']);');
     } else {
       lines.push('var '+vP+'='+vCam+'.property("Transform").property("Position");');
-      if (move==='右パン'||move==='スライダー右') {
+      if (move==='PAN RIGHT'||move==='SLIDE RIGHT') {
         lines.push(vP+'.setValueAtTime(0,[W/2-'+PAN+',H/2,'+Z0+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2+'+PAN+',H/2,'+Z0+']);');
-      } else if (move==='左パン'||move==='スライダー左') {
+      } else if (move==='PAN LEFT'||move==='SLIDE LEFT') {
         lines.push(vP+'.setValueAtTime(0,[W/2+'+PAN+',H/2,'+Z0+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2-'+PAN+',H/2,'+Z0+']);');
-      } else if (move==='ズームイン'||cut.shotType==='CU'||cut.shotType==='ECU') {
+      } else if (move==='ZOOM IN'||cut.shotType==='CU'||cut.shotType==='ECU') {
         lines.push(vP+'.setValueAtTime(0,[W/2,H/2,'+ZF+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2,H/2,'+ZN+']);');
-      } else if (move==='ズームアウト') {
+      } else if (move==='ZOOM OUT') {
         lines.push(vP+'.setValueAtTime(0,[W/2,H/2,'+ZN+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2,H/2,'+ZF+']);');
-      } else if (move==='ティルトアップ') {
+      } else if (move==='TILT UP') {
         lines.push(vP+'.setValueAtTime(0,[W/2,H/2+'+TILT+','+Z0+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2,H/2-'+TILT+','+Z0+']);');
-      } else if (move==='ティルトダウン') {
+      } else if (move==='TILT DOWN') {
         lines.push(vP+'.setValueAtTime(0,[W/2,H/2-'+TILT+','+Z0+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2,H/2+'+TILT+','+Z0+']);');
-      } else if (move==='ドリー前進') {
+      } else if (move==='DOLLY IN') {
         lines.push(vP+'.setValueAtTime(0,[W/2,H/2,'+ZF+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2,H/2,'+Z0+']);');
-      } else if (move==='ドリー後退') {
+      } else if (move==='DOLLY OUT') {
         lines.push(vP+'.setValueAtTime(0,[W/2,H/2,'+Z0+']);');
         lines.push(vP+'.setValueAtTime('+dur+',[W/2,H/2,'+ZF+']);');
-      } else if (move==='オービット'||cut.shotType==='CURVE') {
+      } else if (move==='ORBIT'||cut.shotType==='CURVE') {
         const R=900;
         for (let k=0;k<=8;k++){
           const t=(dur/8*k).toFixed(3);
@@ -1731,7 +1731,7 @@ body { background: #fff; color: #000; font-family: 'Noto Sans JP', sans-serif; f
 .audio-ln { font-family: 'DM Mono', monospace; font-size: 6.5px; color: #aaa; margin-top: 2px; }
 .pf { display: flex; justify-content: space-between; margin-top: 6px; padding-top: 5px; border-top: 0.5px solid #ccc; }
 .pf span { font-family: 'DM Mono', monospace; font-size: 7px; color: #bbb; letter-spacing: 0.08em; }
-@media print {}
+@media print { .no-print { display: none; } }
 </style></head><body>`;
 
   for (let p = 0; p < totalPages; p++) {
@@ -1780,7 +1780,10 @@ body { background: #fff; color: #000; font-family: 'Noto Sans JP', sans-serif; f
     html += `</div>`;
   }
 
-  html += `</body></html>`;
+  html += `<div class="no-print" style="position:fixed;bottom:20px;right:20px;display:flex;gap:8px">
+    <button onclick="window.print()" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;padding:10px 20px;background:#000;color:#fff;border:none;cursor:pointer">Print / Save PDF</button>
+    <button onclick="window.close()" style="font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;padding:10px 20px;background:#fff;color:#000;border:1px solid #000;cursor:pointer">Close</button>
+  </div></body></html>`;
 
   const w = window.open('', '_blank');
   w.document.write(html);
