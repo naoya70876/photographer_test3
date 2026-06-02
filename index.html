@@ -1286,212 +1286,344 @@ function exportPremiere() {
   });
   if (!allCuts.length) { showToast('カットがありません'); return; }
 
-  const LABEL = {WS:'2',MS:'3',CU:'4',ECU:'5',OTS:'6',POV:'7',INSERT:'8','CURVE':'1'};
+  const SHOT_COL = {
+    WS:'#2E8D57', MS:'#594DC0', CU:'#C04030', ECU:'#CC2626',
+    OTS:'#267ACC', POV:'#808080', INSERT:'#4D4D4D', CURVE:'#D98C1A'
+  };
+  const LABEL = {WS:'2',MS:'3',CU:'4',ECU:'5',OTS:'6',POV:'7',INSERT:'8',CURVE:'1'};
 
-  // Shot type RGB colors for solid bg (Premiere RGB 0-255)
-  const SOLID_RGB = {
-    WS:    [46,140,87],  MS:   [89,77,192],  CU:   [192,64,48],
-    ECU:   [204,38,38],  OTS:  [38,114,204], POV:  [128,128,128],
-    INSERT:[77,77,77],   CURVE:[217,140,26],
+  // SVG paths for each shot type (1920x1080 coordinate space)
+  const SVG_PATHS = {
+    WS:    `<rect x="160" y="112" width="1600" height="856" rx="40" fill="none" stroke="white" stroke-width="28"/>
+            <line x1="160" y1="540" x2="1760" y2="540" stroke="white" stroke-width="14" stroke-dasharray="60 40" opacity="0.4"/>
+            <line x1="960" y1="112" x2="960" y2="968" stroke="white" stroke-width="14" stroke-dasharray="60 40" opacity="0.4"/>
+            <circle cx="960" cy="540" r="180" fill="none" stroke="white" stroke-width="28"/>
+            <circle cx="960" cy="540" r="50" fill="white" opacity="0.4"/>`,
+    MS:    `<rect x="160" y="112" width="1600" height="856" rx="40" fill="none" stroke="white" stroke-width="28"/>
+            <ellipse cx="960" cy="580" rx="260" ry="400" fill="none" stroke="white" stroke-width="28"/>
+            <line x1="960" y1="180" x2="960" y2="968" stroke="white" stroke-width="14" stroke-dasharray="60 40" opacity="0.3"/>`,
+    CU:    `<rect x="160" y="112" width="1600" height="856" rx="40" fill="none" stroke="white" stroke-width="28"/>
+            <circle cx="960" cy="540" r="340" fill="none" stroke="white" stroke-width="28"/>
+            <circle cx="960" cy="540" r="100" fill="white" opacity="0.35"/>
+            <line x1="520" y1="540" x2="1400" y2="540" stroke="white" stroke-width="14" opacity="0.25"/>
+            <line x1="960" y1="200" x2="960" y2="880" stroke="white" stroke-width="14" opacity="0.25"/>`,
+    ECU:   `<rect x="160" y="112" width="1600" height="856" rx="40" fill="none" stroke="white" stroke-width="28"/>
+            <circle cx="960" cy="540" r="460" fill="none" stroke="white" stroke-width="28"/>
+            <circle cx="960" cy="540" r="150" fill="white" opacity="0.3"/>
+            <line x1="160" y1="540" x2="1760" y2="540" stroke="white" stroke-width="14" opacity="0.2"/>
+            <line x1="960" y1="112" x2="960" y2="968" stroke="white" stroke-width="14" opacity="0.2"/>`,
+    OTS:   `<rect x="160" y="112" width="1600" height="856" rx="40" fill="none" stroke="white" stroke-width="28"/>
+            <ellipse cx="460" cy="880" rx="280" ry="200" fill="none" stroke="white" stroke-width="28"/>
+            <line x1="460" y1="680" x2="460" y2="360" stroke="white" stroke-width="28"/>
+            <ellipse cx="460" cy="300" rx="130" ry="130" fill="none" stroke="white" stroke-width="28"/>
+            <rect x="760" y="260" width="700" height="520" rx="20" fill="none" stroke="white" stroke-width="22" opacity="0.6"/>
+            <ellipse cx="1110" cy="520" rx="140" ry="200" fill="none" stroke="white" stroke-width="22" opacity="0.7"/>`,
+    POV:   `<rect x="160" y="112" width="1600" height="856" rx="40" fill="none" stroke="white" stroke-width="28"/>
+            <path d="M160 968 Q960 168 1760 968" fill="none" stroke="white" stroke-width="22" opacity="0.5"/>
+            <path d="M400 968 Q960 380 1520 968" fill="none" stroke="white" stroke-width="22" opacity="0.7"/>
+            <circle cx="960" cy="780" r="100" fill="none" stroke="white" stroke-width="28"/>
+            <line x1="960" y1="112" x2="960" y2="680" stroke="white" stroke-width="14" stroke-dasharray="50 40" opacity="0.5"/>`,
+    INSERT:`<rect x="160" y="112" width="1600" height="856" rx="40" fill="none" stroke="white" stroke-width="28" opacity="0.4"/>
+            <rect x="480" y="260" width="1000" height="560" rx="20" fill="none" stroke="white" stroke-width="32"/>
+            <line x1="160" y1="112" x2="480" y2="260" stroke="white" stroke-width="14" stroke-dasharray="40 30" opacity="0.4"/>
+            <line x1="1760" y1="112" x2="1480" y2="260" stroke="white" stroke-width="14" stroke-dasharray="40 30" opacity="0.4"/>
+            <line x1="160" y1="968" x2="480" y2="820" stroke="white" stroke-width="14" stroke-dasharray="40 30" opacity="0.4"/>
+            <line x1="1760" y1="968" x2="1480" y2="820" stroke="white" stroke-width="14" stroke-dasharray="40 30" opacity="0.4"/>`,
+    CURVE: `<rect x="160" y="112" width="1600" height="856" rx="40" fill="none" stroke="white" stroke-width="28"/>
+            <path d="M260 820 C520 260 800 740 1100 420 C1260 260 1460 340 1660 260"
+              fill="none" stroke="white" stroke-width="32" stroke-dasharray="90 40"/>
+            <polygon points="1660,260 1540,310 1580,440" fill="white" opacity="0.7"/>
+            <circle cx="260" cy="820" r="60" fill="white" opacity="0.5"/>`,
   };
 
-  // SVG icon paths encoded as text description for title generator
-  const SHOT_DESC = {
-    WS:'Wide Shot — Full scene establishing',
-    MS:'Medium Shot — Subject waist up',
-    CU:'Close Up — Face / detail',
-    ECU:'Extreme Close Up — Macro detail',
-    OTS:'Over the Shoulder',
-    POV:'Point of View',
-    INSERT:'Insert Shot — Detail cutaway',
-    CURVE:'Curve Move — Camera orbit/arc',
-  };
-
-  function tc(frames) {
-    const h=Math.floor(frames/FPS/3600), m=Math.floor(frames/FPS/60)%60,
-          s=Math.floor(frames/FPS)%60,   f=frames%FPS;
-    return [h,m,s,f].map(n=>String(n).padStart(2,'0')).join(':');
+  // ── Draw one frame of the shot image onto canvas ──────────────────────────
+  function drawShotFrame(ctx, shotType, bgColor) {
+    // Background
+    ctx.fillStyle = bgColor || '#333';
+    ctx.fillRect(0, 0, W, H);
+    // Top label strip
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    ctx.fillRect(0, 0, W, 110);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 72px "DM Mono", monospace';
+    ctx.fillText(shotType, 60, 84);
+    ctx.font = '46px "Noto Sans JP", sans-serif';
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.fillText(SHOT_NAMES[shotType] || shotType, 240, 80);
   }
 
-  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="5">\n';
+  // ── Render shot WebM via Canvas + MediaRecorder ───────────────────────────
+  // Returns a Promise<{shotType, data:Uint8Array}>
+  function renderShotWebM(shotType, bgColor, durationSec) {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
 
-  // ── Per-cut nested sequences (appear before master sequence) ──
-  allCuts.forEach(({cut}, idx) => {
-    const dur  = (cut.duration||4) * FPS;
-    const n    = String(idx+1).padStart(2,'0');
-    const name = 'C'+n+'_'+(cut.shotType||'XX');
-    const rgb  = SOLID_RGB[cut.shotType] || [80,80,80];
-    const desc = SHOT_DESC[cut.shotType] || (cut.shotType||'Shot');
-    const note = [cut.description, cut.camera && 'Cam:'+cut.camera, cut.audio && 'Audio:'+cut.audio].filter(Boolean).join(' | ');
+      // Load SVG icon
+      const svgBody = SVG_PATHS[shotType] || '';
+      const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${svgBody}</svg>`;
+      const svgBlob = new Blob([svgStr], {type:'image/svg+xml'});
+      const svgURL  = URL.createObjectURL(svgBlob);
+      const img = new Image();
 
-    xml += '<sequence id="seq-cut-'+n+'">\n';
-    xml += '  <name>'+X(name)+'</name>\n';
-    xml += '  <duration>'+dur+'</duration>\n';
-    xml += '  <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
-    xml += '  <timecode><rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>';
-    xml += '<string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode>\n';
-    xml += '  <media>\n';
-    xml += '    <video>\n';
-    xml += '      <format><samplecharacteristics>';
-    xml += '<rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>';
-    xml += '<width>'+W+'</width><height>'+H+'</height>';
-    xml += '<anamorphic>FALSE</anamorphic><pixelaspectratio>square</pixelaspectratio>';
-    xml += '<fielddominance>none</fielddominance>';
-    xml += '</samplecharacteristics></format>\n';
-    xml += '      <track>\n';
-    xml += '        <enabled>TRUE</enabled><locked>FALSE</locked>\n';
+      img.onload = () => {
+        // Check MediaRecorder support
+        const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+          ? 'video/webm;codecs=vp9'
+          : MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
+            ? 'video/webm;codecs=vp8'
+            : 'video/webm';
 
-    // V1: Solid color background
-    xml += '        <generatoritem id="gi-bg-'+n+'">\n';
-    xml += '          <name>'+X(name+' BG')+'</name>\n';
-    xml += '          <enabled>TRUE</enabled>\n';
-    xml += '          <duration>'+dur+'</duration>\n';
-    xml += '          <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
-    xml += '          <start>0</start><end>'+dur+'</end>\n';
-    xml += '          <in>0</in><out>'+dur+'</out>\n';
-    xml += '          <effect>\n';
-    xml += '            <name>Color</name>\n';
-    xml += '            <effectid>color</effectid>\n';
-    xml += '            <effectcategory>generator</effectcategory>\n';
-    xml += '            <effecttype>generator</effecttype>\n';
-    xml += '            <mediatype>video</mediatype>\n';
-    xml += '            <parameter>\n';
-    xml += '              <parameterid>color</parameterid>\n';
-    xml += '              <name>Color</name>\n';
-    xml += '              <value><red>'+rgb[0]+'</red><green>'+rgb[1]+'</green><blue>'+rgb[2]+'</blue></value>\n';
-    xml += '            </parameter>\n';
-    xml += '          </effect>\n';
-    xml += '        </generatoritem>\n';
+        const stream   = canvas.captureStream(FPS);
+        const recorder = new MediaRecorder(stream, {mimeType, videoBitsPerSecond: 8000000});
+        const chunks   = [];
+        recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+        recorder.onstop = () => {
+          URL.revokeObjectURL(svgURL);
+          const blob = new Blob(chunks, {type: mimeType});
+          blob.arrayBuffer().then(buf => resolve({shotType, data: new Uint8Array(buf), mimeType}));
+        };
+        recorder.onerror = e => { URL.revokeObjectURL(svgURL); reject(e); };
 
-    xml += '      </track>\n';
+        recorder.start();
+        // Draw frames for durationSec
+        const totalFrames = Math.ceil(durationSec * FPS);
+        let frame = 0;
+        function drawLoop() {
+          drawShotFrame(ctx, shotType, bgColor);
+          ctx.drawImage(img, 0, 0, W, H);
+          frame++;
+          if (frame < totalFrames) requestAnimationFrame(drawLoop);
+          else recorder.stop();
+        }
+        drawLoop();
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(svgURL);
+        // Fallback: no SVG icon
+        const stream   = canvas.captureStream(FPS);
+        const mimeType = 'video/webm';
+        const recorder = new MediaRecorder(stream, {mimeType});
+        const chunks   = [];
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, {type:mimeType});
+          blob.arrayBuffer().then(buf => resolve({shotType, data: new Uint8Array(buf), mimeType}));
+        };
+        recorder.start();
+        drawShotFrame(ctx, shotType, bgColor);
+        setTimeout(() => recorder.stop(), durationSec * 1000);
+      };
+      img.src = svgURL;
+    });
+  }
 
-    // V2: Shot type text overlay
-    xml += '      <track>\n';
-    xml += '        <enabled>TRUE</enabled><locked>FALSE</locked>\n';
-    xml += '        <generatoritem id="gi-txt-'+n+'">\n';
-    xml += '          <name>'+X(name+' LABEL')+'</name>\n';
-    xml += '          <enabled>TRUE</enabled>\n';
-    xml += '          <duration>'+dur+'</duration>\n';
-    xml += '          <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
-    xml += '          <start>0</start><end>'+dur+'</end>\n';
-    xml += '          <in>0</in><out>'+dur+'</out>\n';
-    xml += '          <effect>\n';
-    xml += '            <name>Text</name>\n';
-    xml += '            <effectid>text</effectid>\n';
-    xml += '            <effectcategory>generator</effectcategory>\n';
-    xml += '            <effecttype>generator</effecttype>\n';
-    xml += '            <mediatype>video</mediatype>\n';
-    // Shot type label (top-left)
-    xml += '            <parameter>\n';
-    xml += '              <parameterid>str</parameterid>\n';
-    xml += '              <name>Text</name>\n';
-    xml += '              <value>'+X(name+'\n'+desc+'\n\n'+note)+'</value>\n';
-    xml += '            </parameter>\n';
-    xml += '            <parameter>\n';
-    xml += '              <parameterid>fontsize</parameterid>\n';
-    xml += '              <name>Size</name><value>48</value>\n';
-    xml += '            </parameter>\n';
-    xml += '            <parameter>\n';
-    xml += '              <parameterid>origin</parameterid>\n';
-    xml += '              <name>Origin</name>\n';
-    xml += '              <value><horiz>-0.38</horiz><vert>0.38</vert></value>\n';
-    xml += '            </parameter>\n';
-    xml += '          </effect>\n';
-    xml += '        </generatoritem>\n';
-    xml += '      </track>\n';
+  // ── Pure-JS minimal ZIP (store, no compression) ───────────────────────────
+  function makeZip(files) {
+    function u16(n){const b=new Uint8Array(2);new DataView(b.buffer).setUint16(0,n,true);return b;}
+    function u32(n){const b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,n,true);return b;}
+    function cat(...a){const t=a.reduce((s,x)=>s+x.length,0),o=new Uint8Array(t);let p=0;a.forEach(x=>{o.set(x,p);p+=x.length;});return o;}
+    function crc32(d){
+      let c=0xFFFFFFFF;
+      if(!crc32._t){crc32._t=new Uint32Array(256);for(let i=0;i<256;i++){let v=i;for(let j=0;j<8;j++)v=v&1?(v>>>1)^0xEDB88320:(v>>>1);crc32._t[i]=v;}}
+      for(let i=0;i<d.length;i++)c=crc32._t[(c^d[i])&0xFF]^(c>>>8);return(c^0xFFFFFFFF)>>>0;
+    }
+    const enc=new TextEncoder();
+    const now=new Date();
+    const dt=(now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1);
+    const dd=((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate();
+    const lp=[],cp=[];let off=0;
+    files.forEach(({name,data})=>{
+      const fn=enc.encode(name),crc=crc32(data),sz=data.length;
+      const lh=cat(new Uint8Array([0x50,0x4B,0x03,0x04]),u16(20),u16(0),u16(0),u16(dt),u16(dd),u32(crc),u32(sz),u32(sz),u16(fn.length),u16(0));
+      lp.push(lh,fn,data);
+      const cd=cat(new Uint8Array([0x50,0x4B,0x01,0x02]),u16(20),u16(0),u16(20),u16(0),u16(0),u16(dt),u16(dd),u32(crc),u32(sz),u32(sz),u16(fn.length),u16(0),u16(0),u16(0),u16(0),u32(0x20),u32(off));
+      cp.push(cd,fn);
+      off+=lh.length+fn.length+sz;
+    });
+    const ld=cat(...lp),cd=cat(...cp);
+    const eocd=cat(new Uint8Array([0x50,0x4B,0x05,0x06]),u16(0),u16(0),u16(files.length),u16(files.length),u32(cd.length),u32(ld.length),u16(0));
+    return cat(ld,cd,eocd);
+  }
 
-    xml += '    </video>\n';
-    xml += '    <audio><numOutputChannels>2</numOutputChannels>';
-    xml += '<track><enabled>TRUE</enabled><locked>FALSE</locked></track></audio>\n';
-    xml += '  </media>\n';
-    xml += '  <markers><marker>';
-    xml += '<name>'+X('C'+n)+'</name>';
-    xml += '<comment>'+X(note)+'</comment>';
-    xml += '<in>0</in><out>0</out>';
-    xml += '</marker></markers>\n';
-    xml += '</sequence>\n\n';
+  // ── Build Premiere XML ────────────────────────────────────────────────────
+  function buildXML(videoFiles) {
+    // videoFiles: {shotType: {filename, mimeType}}
+    const ext = (mt) => mt && mt.includes('webm') ? 'webm' : 'webm';
+    let xml='<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="5">\n\n';
+
+    // ── Per-cut nested sequences ──
+    allCuts.forEach(({cut},idx)=>{
+      const dur=(cut.duration||4)*FPS;
+      const n=String(idx+1).padStart(2,'0');
+      const seqName='C'+n+'_'+(cut.shotType||'XX');
+      const vf=videoFiles[cut.shotType];
+      const videoPath=vf?('videos/'+vf.filename):'';
+      const desc=(cut.description||'').replace(/\n/g,' ');
+
+      xml+=`<sequence id="seq-cut-${n}">\n`;
+      xml+=`  <name>${X(seqName)}</name>\n`;
+      xml+=`  <duration>${dur}</duration>\n`;
+      xml+=`  <rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate>\n`;
+      xml+=`  <timecode><rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate><string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode>\n`;
+      xml+=`  <media>\n    <video>\n`;
+      xml+=`      <format><samplecharacteristics><rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate><width>${W}</width><height>${H}</height><anamorphic>FALSE</anamorphic><pixelaspectratio>square</pixelaspectratio><fielddominance>none</fielddominance></samplecharacteristics></format>\n`;
+
+      // V1: Shot image WebM
+      if (videoPath) {
+        xml+=`      <track>\n        <enabled>TRUE</enabled><locked>FALSE</locked>\n`;
+        xml+=`        <clipitem id="ci-v1-${n}">\n`;
+        xml+=`          <masterclipid>ci-v1-${n}</masterclipid>\n`;
+        xml+=`          <name>${X(seqName+'_shot')}</name>\n`;
+        xml+=`          <enabled>TRUE</enabled>\n`;
+        xml+=`          <duration>${dur}</duration>\n`;
+        xml+=`          <rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate>\n`;
+        xml+=`          <start>0</start><end>${dur}</end>\n`;
+        xml+=`          <in>0</in><out>${dur}</out>\n`;
+        xml+=`          <file id="video-file-${cut.shotType}">\n`;
+        xml+=`            <name>${X(vf.filename)}</name>\n`;
+        xml+=`            <pathurl>${X(videoPath)}</pathurl>\n`;
+        xml+=`            <rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate>\n`;
+        xml+=`            <duration>${dur}</duration>\n`;
+        xml+=`            <timecode><rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate><string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode>\n`;
+        xml+=`            <media><video><duration>${dur}</duration><samplecharacteristics><rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate><width>${W}</width><height>${H}</height></samplecharacteristics></video></media>\n`;
+        xml+=`          </file>\n`;
+        xml+=`        </clipitem>\n      </track>\n`;
+      }
+
+      // V2: Description text (white bg, black Noto Sans text)
+      xml+=`      <track>\n        <enabled>TRUE</enabled><locked>FALSE</locked>\n`;
+      xml+=`        <generatoritem id="gi-txt-${n}">\n`;
+      xml+=`          <name>${X(seqName+'_desc')}</name>\n`;
+      xml+=`          <enabled>TRUE</enabled>\n`;
+      xml+=`          <duration>${dur}</duration>\n`;
+      xml+=`          <rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate>\n`;
+      xml+=`          <start>0</start><end>${dur}</end>\n`;
+      xml+=`          <in>0</in><out>${dur}</out>\n`;
+      xml+=`          <effect>\n`;
+      xml+=`            <name>Text</name><effectid>text</effectid>\n`;
+      xml+=`            <effectcategory>generator</effectcategory>\n`;
+      xml+=`            <effecttype>generator</effecttype>\n`;
+      xml+=`            <mediatype>video</mediatype>\n`;
+      // Text content
+      xml+=`            <parameter><parameterid>str</parameterid><name>Text</name><value>${X(desc||'—')}</value></parameter>\n`;
+      // Font size
+      xml+=`            <parameter><parameterid>fontsize</parameterid><name>Size</name><value>72</value></parameter>\n`;
+      // Font name (Noto Sans)
+      xml+=`            <parameter><parameterid>font</parameterid><name>Font</name><value>Noto Sans JP</value></parameter>\n`;
+      // Text color: black #000000
+      xml+=`            <parameter><parameterid>fontcolor</parameterid><name>Color</name><value><alpha>255</alpha><red>0</red><green>0</green><blue>0</blue></value></parameter>\n`;
+      // Background color: white #ffffff
+      xml+=`            <parameter><parameterid>backgroundcolor</parameterid><name>Background Color</name><value><alpha>255</alpha><red>255</red><green>255</green><blue>255</blue></value></parameter>\n`;
+      xml+=`            <parameter><parameterid>backgroundopacity</parameterid><name>Background Opacity</name><value>100</value></parameter>\n`;
+      // Position: bottom strip
+      xml+=`            <parameter><parameterid>origin</parameterid><name>Origin</name><value><horiz>0</horiz><vert>-0.38</vert></value></parameter>\n`;
+      xml+=`          </effect>\n`;
+      xml+=`        </generatoritem>\n      </track>\n`;
+
+      xml+=`    </video>\n`;
+      xml+=`    <audio><numOutputChannels>2</numOutputChannels><track><enabled>TRUE</enabled><locked>FALSE</locked></track></audio>\n`;
+      xml+=`  </media>\n`;
+      xml+=`  <markers><marker><name>${X(seqName)}</name><comment>${X(desc)}</comment><in>0</in><out>0</out></marker></markers>\n`;
+      xml+=`</sequence>\n\n`;
+    });
+
+    // ── Master sequence ──
+    const totalFrames=allCuts.reduce((a,{cut})=>a+(cut.duration||4)*FPS,0);
+    xml+=`<sequence id="seq-master">\n`;
+    xml+=`  <name>${X('MASTER_'+rawName)}</name>\n`;
+    xml+=`  <duration>${totalFrames}</duration>\n`;
+    xml+=`  <rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate>\n`;
+    xml+=`  <timecode><rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate><string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode>\n`;
+    xml+=`  <media>\n    <video>\n`;
+    xml+=`      <format><samplecharacteristics><rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate><width>${W}</width><height>${H}</height><anamorphic>FALSE</anamorphic><pixelaspectratio>square</pixelaspectratio><fielddominance>none</fielddominance></samplecharacteristics></format>\n`;
+    xml+=`      <track>\n        <enabled>TRUE</enabled><locked>FALSE</locked>\n`;
+
+    let offset=0;
+    allCuts.forEach(({cut},idx)=>{
+      const dur=(cut.duration||4)*FPS;
+      const n=String(idx+1).padStart(2,'0');
+      const seqName='C'+n+'_'+(cut.shotType||'XX');
+      const label=LABEL[cut.shotType]||'0';
+      const note=[cut.description,cut.camera&&'Cam:'+cut.camera,cut.audio&&'Audio:'+cut.audio].filter(Boolean).join(' | ');
+
+      xml+=`        <clipitem id="ci-master-${n}">\n`;
+      xml+=`          <masterclipid>ci-master-${n}</masterclipid>\n`;
+      xml+=`          <name>${X(seqName)}</name>\n`;
+      xml+=`          <enabled>TRUE</enabled>\n`;
+      xml+=`          <duration>${dur}</duration>\n`;
+      xml+=`          <rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate>\n`;
+      xml+=`          <start>${offset}</start><end>${offset+dur}</end>\n`;
+      xml+=`          <in>0</in><out>${dur}</out>\n`;
+      xml+=`          <file id="seq-ref-${n}">\n`;
+      xml+=`            <name>${X(seqName)}</name><pathurl></pathurl>\n`;
+      xml+=`            <rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate>\n`;
+      xml+=`            <duration>${dur}</duration>\n`;
+      xml+=`            <timecode><rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate><string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode>\n`;
+      xml+=`            <media><video><duration>${dur}</duration><samplecharacteristics><rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate><width>${W}</width><height>${H}</height></samplecharacteristics></video></media>\n`;
+      xml+=`          </file>\n`;
+      xml+=`          <labels><label2>${label}</label2></labels>\n`;
+      xml+=`          <comments><mastercomment1>${X(note)}</mastercomment1></comments>\n`;
+      xml+=`        </clipitem>\n`;
+      offset+=dur;
+    });
+
+    xml+=`      </track>\n    </video>\n`;
+    xml+=`    <audio><numOutputChannels>2</numOutputChannels><track><enabled>TRUE</enabled><locked>FALSE</locked></track></audio>\n`;
+    xml+=`  </media>\n  <markers>\n`;
+    offset=0;
+    allCuts.forEach(({cut},idx)=>{
+      const dur=(cut.duration||4)*FPS;
+      const n=String(idx+1).padStart(2,'0');
+      xml+=`    <marker><name>${X('C'+n+' '+(cut.shotType||''))}</name><comment>${X(cut.description||'')}</comment><in>${offset}</in><out>${offset}</out></marker>\n`;
+      offset+=dur;
+    });
+    xml+=`  </markers>\n</sequence>\n</xmeml>\n`;
+    return xml;
+  }
+
+  // ── Orchestrate ────────────────────────────────────────────────────────────
+  const uniqueShots=[...new Set(allCuts.map(({cut})=>cut.shotType).filter(Boolean))];
+  // Use the maximum duration of that shot type for the video file length
+  const shotDuration={};
+  allCuts.forEach(({cut})=>{
+    const d=cut.duration||4;
+    if(!shotDuration[cut.shotType]||d>shotDuration[cut.shotType]) shotDuration[cut.shotType]=d;
   });
 
-  // ── Master sequence — references nested cut sequences ──
-  const totalFrames = allCuts.reduce((a,{cut})=>a+(cut.duration||4)*FPS,0);
-  xml += '<sequence id="seq-master">\n';
-  xml += '  <name>'+X('MASTER_'+rawName)+'</name>\n';
-  xml += '  <duration>'+totalFrames+'</duration>\n';
-  xml += '  <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
-  xml += '  <timecode><rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>';
-  xml += '<string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode>\n';
-  xml += '  <media>\n';
-  xml += '    <video>\n';
-  xml += '      <format><samplecharacteristics>';
-  xml += '<rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>';
-  xml += '<width>'+W+'</width><height>'+H+'</height>';
-  xml += '<anamorphic>FALSE</anamorphic><pixelaspectratio>square</pixelaspectratio>';
-  xml += '<fielddominance>none</fielddominance>';
-  xml += '</samplecharacteristics></format>\n';
-  xml += '      <track>\n';
-  xml += '        <enabled>TRUE</enabled><locked>FALSE</locked>\n';
+  showToast('動画生成中... しばらくお待ちください');
+  const videoResults={};
+  let done=0;
 
-  let offset = 0;
-  allCuts.forEach(({cut}, idx) => {
-    const dur  = (cut.duration||4) * FPS;
-    const n    = String(idx+1).padStart(2,'0');
-    const name = 'C'+n+'_'+(cut.shotType||'XX');
-    const ciid = 'ci-master-'+n;
-    const label = LABEL[cut.shotType] || '0';
-
-    // Each clipitem references the nested cut sequence via <sequence> linkage
-    xml += '        <clipitem id="'+ciid+'">\n';
-    xml += '          <masterclipid>'+ciid+'</masterclipid>\n';
-    xml += '          <name>'+X(name)+'</name>\n';
-    xml += '          <enabled>TRUE</enabled>\n';
-    xml += '          <duration>'+dur+'</duration>\n';
-    xml += '          <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
-    xml += '          <start>'+offset+'</start>\n';
-    xml += '          <end>'+(offset+dur)+'</end>\n';
-    xml += '          <in>0</in><out>'+dur+'</out>\n';
-    // Link to nested sequence as file source
-    xml += '          <file id="file-'+n+'">\n';
-    xml += '            <name>'+X(name)+'</name>\n';
-    xml += '            <pathurl></pathurl>\n';
-    xml += '            <rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>\n';
-    xml += '            <duration>'+dur+'</duration>\n';
-    xml += '            <timecode><rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>';
-    xml += '<string>00:00:00:00</string><frame>0</frame><displayformat>NDF</displayformat></timecode>\n';
-    xml += '            <media><video><duration>'+dur+'</duration>\n';
-    xml += '              <samplecharacteristics><rate><timebase>'+FPS+'</timebase><ntsc>FALSE</ntsc></rate>';
-    xml += '<width>'+W+'</width><height>'+H+'</height></samplecharacteristics>\n';
-    xml += '            </video></media>\n';
-    xml += '          </file>\n';
-    xml += '          <sourcetrack><mediatype>video</mediatype><trackindex>1</trackindex></sourcetrack>\n';
-    xml += '          <labels><label2>'+label+'</label2></labels>\n';
-    xml += '          <comments><mastercomment1>'+X([cut.description, cut.camera&&'Cam:'+cut.camera, cut.audio&&'Audio:'+cut.audio].filter(Boolean).join(' | '))+'</mastercomment1></comments>\n';
-    xml += '        </clipitem>\n';
-    offset += dur;
+  Promise.all(uniqueShots.map(shotType=>{
+    const dur=shotDuration[shotType]||4;
+    return renderShotWebM(shotType, SHOT_COL[shotType]||'#333', dur)
+      .then(({data,mimeType})=>{
+        const filename=shotType+'.webm';
+        videoResults[shotType]={filename,data,mimeType};
+        done++;
+        showToast(`動画生成中 ${done}/${uniqueShots.length}...`);
+      });
+  })).then(()=>{
+    // Build ZIP
+    const enc=new TextEncoder();
+    const videoFileMeta={};
+    Object.entries(videoResults).forEach(([t,v])=>{ videoFileMeta[t]={filename:v.filename}; });
+    const xmlStr=buildXML(videoFileMeta);
+    const files=[{name:(rawName||'storyboard')+'_Premiere.xml', data:enc.encode(xmlStr)}];
+    Object.values(videoResults).forEach(({filename,data})=>{
+      files.push({name:'videos/'+filename, data});
+    });
+    const zipData=makeZip(files);
+    const blob=new Blob([zipData],{type:'application/zip'});
+    download(blob,(rawName||'storyboard')+'_Premiere.zip');
+    showToast('✓ Premiere ZIP 書き出し完了');
+    closeExportModal();
+  }).catch(err=>{
+    console.error(err);
+    showToast('エラーが発生しました: '+err.message);
   });
-
-  xml += '      </track>\n    </video>\n';
-  xml += '    <audio><numOutputChannels>2</numOutputChannels>';
-  xml += '<track><enabled>TRUE</enabled><locked>FALSE</locked></track></audio>\n';
-  xml += '  </media>\n';
-
-  // Master markers
-  xml += '  <markers>\n';
-  offset = 0;
-  allCuts.forEach(({cut}, idx) => {
-    const dur = (cut.duration||4)*FPS;
-    const n   = String(idx+1).padStart(2,'0');
-    xml += '  <marker><name>'+X('C'+n+' '+(cut.shotType||''))+'</name>';
-    xml += '<comment>'+X(cut.description||'')+'</comment>';
-    xml += '<in>'+offset+'</in><out>'+offset+'</out></marker>\n';
-    offset += dur;
-  });
-  xml += '  </markers>\n';
-  xml += '</sequence>\n</xmeml>\n';
-
-  const blob = new Blob([xml], {type:'text/xml;charset=utf-8'});
-  download(blob, (rawName||'storyboard')+'_Premiere.xml');
-  showToast('Premiere XML を書き出しました');
-  closeExportModal();
 }
 function escXML(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
