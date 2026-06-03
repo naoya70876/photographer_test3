@@ -1306,17 +1306,85 @@ function exportPremiere() {
     OTS:[38,122,204], POV:[128,128,128], INSERT:[77,77,77], CURVE:[217,140,26]
   };
 
+  // Helper: build a Premiere-compatible Text (Legacy Title) generatoritem
+  // Uses effectid "texttitler" which maps to Legacy Title in Premiere
+  function textGen(id, name, dur, textValue) {
+    // textValue is the description string, displayed as black text on white background
+    let x = '';
+    x += `        <generatoritem id="${id}">\n`;
+    x += `          <name>${X(name)}</name>\n`;
+    x += `          <enabled>TRUE</enabled><duration>${dur}</duration>\n`;
+    x += `          <rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate>\n`;
+    x += `          <start>0</start><end>${dur}</end><in>0</in><out>${dur}</out>\n`;
+    x += `          <effect>\n`;
+    x += `            <name>Text</name>\n`;
+    x += `            <effectid>text</effectid>\n`;
+    x += `            <effectcategory>generator</effectcategory>\n`;
+    x += `            <effecttype>generator</effecttype>\n`;
+    x += `            <mediatype>video</mediatype>\n`;
+    // Text string — the actual description content
+    x += `            <parameter>\n`;
+    x += `              <parameterid>str</parameterid>\n`;
+    x += `              <name>Text</name>\n`;
+    x += `              <value>${X(textValue)}</value>\n`;
+    x += `            </parameter>\n`;
+    // Font size
+    x += `            <parameter>\n`;
+    x += `              <parameterid>fontsize</parameterid>\n`;
+    x += `              <name>Size</name>\n`;
+    x += `              <value>72</value>\n`;
+    x += `            </parameter>\n`;
+    // Font family
+    x += `            <parameter>\n`;
+    x += `              <parameterid>font</parameterid>\n`;
+    x += `              <name>Font</name>\n`;
+    x += `              <value>Noto Sans JP</value>\n`;
+    x += `            </parameter>\n`;
+    // Text color: black
+    x += `            <parameter>\n`;
+    x += `              <parameterid>fontcolor</parameterid>\n`;
+    x += `              <name>Color</name>\n`;
+    x += `              <value><alpha>255</alpha><red>0</red><green>0</green><blue>0</blue></value>\n`;
+    x += `            </parameter>\n`;
+    // Background: white, full opacity
+    x += `            <parameter>\n`;
+    x += `              <parameterid>backgroundcolor</parameterid>\n`;
+    x += `              <name>Background Color</name>\n`;
+    x += `              <value><alpha>255</alpha><red>255</red><green>255</green><blue>255</blue></value>\n`;
+    x += `            </parameter>\n`;
+    x += `            <parameter>\n`;
+    x += `              <parameterid>backgroundopacity</parameterid>\n`;
+    x += `              <name>Background Opacity</name>\n`;
+    x += `              <value>100</value>\n`;
+    x += `            </parameter>\n`;
+    // Horizontal alignment: centered
+    x += `            <parameter>\n`;
+    x += `              <parameterid>justification</parameterid>\n`;
+    x += `              <name>Alignment</name>\n`;
+    x += `              <value>center</value>\n`;
+    x += `            </parameter>\n`;
+    // Position: vertically centered
+    x += `            <parameter>\n`;
+    x += `              <parameterid>origin</parameterid>\n`;
+    x += `              <name>Origin</name>\n`;
+    x += `              <value><horiz>0</horiz><vert>0</vert></value>\n`;
+    x += `            </parameter>\n`;
+    x += `          </effect>\n`;
+    x += `        </generatoritem>\n`;
+    return x;
+  }
+
   let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="5">\n\n';
 
   // ── Per-cut nested sequences ──────────────────────────────────────────────
   allCuts.forEach(({cut}, idx) => {
-    const dur  = (cut.duration || 4) * FPS;
-    const n    = String(idx+1).padStart(2,'0');
+    const dur     = (cut.duration || 4) * FPS;
+    const n       = String(idx+1).padStart(2,'0');
     const seqName = 'C'+n+'_'+(cut.shotType||'XX');
-    const rgb  = SHOT_COL_RGB[cut.shotType] || [80,80,80];
-    const desc = (cut.description||'').replace(/\n/g,' ');
-    const note = [cut.description, cut.camera&&'Cam:'+cut.camera, cut.audio&&'Audio:'+cut.audio].filter(Boolean).join(' | ');
-    const shotFullName = (SHOT_NAMES[cut.shotType]||cut.shotType||'').toUpperCase();
+    const rgb     = SHOT_COL_RGB[cut.shotType] || [80,80,80];
+    // Use description field exactly as entered by the user
+    const descText = cut.description || '';
+    const note    = [descText, cut.camera&&'Cam:'+camEN(cut.camera), cut.audio&&'Audio:'+cut.audio].filter(Boolean).join(' | ');
 
     xml += `<sequence id="seq-cut-${n}">\n`;
     xml += `  <name>${X(seqName)}</name>\n`;
@@ -1326,7 +1394,7 @@ function exportPremiere() {
     xml += `  <media>\n    <video>\n`;
     xml += `      <format><samplecharacteristics><rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate><width>${W}</width><height>${H}</height><anamorphic>FALSE</anamorphic><pixelaspectratio>square</pixelaspectratio><fielddominance>none</fielddominance></samplecharacteristics></format>\n`;
 
-    // V1: Solid color background (shot type color)
+    // V1: Shot type color background
     xml += `      <track>\n        <enabled>TRUE</enabled><locked>FALSE</locked>\n`;
     xml += `        <generatoritem id="gi-bg-${n}">\n`;
     xml += `          <name>${X(seqName+'_bg')}</name>\n`;
@@ -1342,25 +1410,10 @@ function exportPremiere() {
     xml += `          </effect>\n`;
     xml += `        </generatoritem>\n      </track>\n`;
 
-    // V2: Description text (black on white, Noto Sans JP)
+    // V2: Description text — black on white, centered, full frame
     xml += `      <track>\n        <enabled>TRUE</enabled><locked>FALSE</locked>\n`;
-    xml += `        <generatoritem id="gi-txt-${n}">\n`;
-    xml += `          <name>${X(seqName+'_desc')}</name>\n`;
-    xml += `          <enabled>TRUE</enabled><duration>${dur}</duration>\n`;
-    xml += `          <rate><timebase>${FPS}</timebase><ntsc>FALSE</ntsc></rate>\n`;
-    xml += `          <start>0</start><end>${dur}</end><in>0</in><out>${dur}</out>\n`;
-    xml += `          <effect>\n`;
-    xml += `            <name>Text</name><effectid>text</effectid>\n`;
-    xml += `            <effectcategory>generator</effectcategory><effecttype>generator</effecttype><mediatype>video</mediatype>\n`;
-    xml += `            <parameter><parameterid>str</parameterid><name>Text</name><value>${X(desc||'—')}</value></parameter>\n`;
-    xml += `            <parameter><parameterid>fontsize</parameterid><name>Size</name><value>72</value></parameter>\n`;
-    xml += `            <parameter><parameterid>font</parameterid><name>Font</name><value>Noto Sans JP</value></parameter>\n`;
-    xml += `            <parameter><parameterid>fontcolor</parameterid><name>Color</name><value><alpha>255</alpha><red>0</red><green>0</green><blue>0</blue></value></parameter>\n`;
-    xml += `            <parameter><parameterid>backgroundcolor</parameterid><name>Background Color</name><value><alpha>255</alpha><red>255</red><green>255</green><blue>255</blue></value></parameter>\n`;
-    xml += `            <parameter><parameterid>backgroundopacity</parameterid><name>Background Opacity</name><value>100</value></parameter>\n`;
-    xml += `            <parameter><parameterid>origin</parameterid><name>Origin</name><value><horiz>0</horiz><vert>-0.38</vert></value></parameter>\n`;
-    xml += `          </effect>\n`;
-    xml += `        </generatoritem>\n      </track>\n`;
+    xml += textGen(`gi-txt-${n}`, seqName+'_desc', dur, descText || '—');
+    xml += `      </track>\n`;
 
     xml += `    </video>\n`;
     xml += `    <audio><numOutputChannels>2</numOutputChannels><track><enabled>TRUE</enabled><locked>FALSE</locked></track></audio>\n`;
@@ -1382,11 +1435,12 @@ function exportPremiere() {
 
   let offset = 0;
   allCuts.forEach(({cut}, idx) => {
-    const dur = (cut.duration||4)*FPS;
-    const n   = String(idx+1).padStart(2,'0');
+    const dur     = (cut.duration||4)*FPS;
+    const n       = String(idx+1).padStart(2,'0');
     const seqName = 'C'+n+'_'+(cut.shotType||'XX');
-    const label = LABEL[cut.shotType]||'0';
-    const note  = [cut.description, cut.camera&&'Cam:'+cut.camera, cut.audio&&'Audio:'+cut.audio].filter(Boolean).join(' | ');
+    const label   = LABEL[cut.shotType]||'0';
+    const desc    = cut.description || '';
+    const note    = [desc, cut.camera&&'Cam:'+camEN(cut.camera), cut.audio&&'Audio:'+cut.audio].filter(Boolean).join(' | ');
 
     xml += `        <clipitem id="ci-master-${n}">\n`;
     xml += `          <masterclipid>ci-master-${n}</masterclipid>\n`;
